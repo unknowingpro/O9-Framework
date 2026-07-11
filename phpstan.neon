@@ -1,0 +1,10 @@
+parameters:
+    level: 8
+    paths:
+        - app
+    excludePaths:
+        - app/Views
+        - app/Lang
+    bootstrapFiles:
+        - phpstan-bootstrap.php
+    treatPhpDocTypesAsCertain: false

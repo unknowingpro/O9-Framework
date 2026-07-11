@@ -1,0 +1,26 @@
+# Dependencies
+/vendor/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Runtime storage (structure recreated by setup/setup.php)
+/storage/*
+!/storage/.gitignore
+
+# Internal docs, backups, old versions — never tracked
+/docs/
+/backup/
+/old/
+
+# Tooling caches & scratch
+/.claude/
+/.phpunit.cache/
+/node_modules/
+*.cache
+*.log
+*.tmp
+.DS_Store
+phpstan-baseline.neon
