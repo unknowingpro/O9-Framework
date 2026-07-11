@@ -374,12 +374,27 @@ class App
     /**
      * Swap PHP's session store for Redis when config('cache.session.driver')
      * is 'redis' and the connection is reachable; native file sessions
-     * otherwise. Implemented alongside the Cache subsystem.
+     * otherwise (with a throttled log warning on degradation).
      */
     private function registerRedisSessionHandler(): void
     {
-        // Populated when Core/Cache lands; kept as an explicit seam so
-        // startSession() reads the same in every O9 project.
+        if (config('cache.session.driver') !== 'redis') {
+            return;
+        }
+        $redis = Cache\RedisConnection::get();
+        if ($redis === null) {
+            // configured for redis but unreachable → native file sessions
+            Cache\RedisConnection::warnFallback('session');
+            return;
+        }
+        session_set_save_handler(
+            new Cache\RedisSessionHandler(
+                $redis,
+                (int) config('cache.session.ttl', 1209600),
+                (string) config('cache.prefix', 'o9:'),
+            ),
+            true,
+        );
     }
 
     /**
