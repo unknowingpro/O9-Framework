@@ -235,7 +235,7 @@ final class Database
      */
     public function transaction(callable $fn): mixed
     {
-        if ($this->inTx()) {
+        if ($this->pdo->inTransaction()) {
             $sp = 'sp_' . (++$this->savepointSeq);
             $this->pdo->exec("SAVEPOINT $sp");
             try {
@@ -243,10 +243,11 @@ final class Database
                 $this->pdo->exec("RELEASE SAVEPOINT $sp");
                 return $result;
             } catch (\Throwable $e) {
-                // Guard: the connection may have been fully rolled back already
-                // (MySQL DDL implicitly commits, ending the transaction).
-                if ($this->inTx()) {
+                try {
                     $this->pdo->exec("ROLLBACK TO SAVEPOINT $sp");
+                } catch (\PDOException) {
+                    // The transaction (and its savepoints) may already be gone —
+                    // MySQL DDL implicitly commits mid-transaction.
                 }
                 throw $e;
             }
@@ -257,20 +258,12 @@ final class Database
             $this->pdo->commit();
             return $result;
         } catch (\Throwable $e) {
-            if ($this->inTx()) {
+            try {
                 $this->pdo->rollBack();
+            } catch (\PDOException) {
+                // Already ended by an implicit commit (MySQL DDL) — nothing to undo.
             }
             throw $e;
         }
-    }
-
-    /**
-     * Live transaction state straight from the driver. Kept as a method (not
-     * inlined) because the state can change out from under static analysis:
-     * MySQL DDL statements implicitly COMMIT mid-transaction.
-     */
-    private function inTx(): bool
-    {
-        return $this->pdo->inTransaction();
     }
 }
