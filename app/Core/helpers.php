@@ -116,6 +116,72 @@ if (!function_exists('uuid4')) {
     }
 }
 
+if (!function_exists('__')) {
+    /**
+     * Translate a key in the current locale with :param substitution.
+     * Delegates to the i18n layer when loaded; before that (or in
+     * single-locale tools with no Lang) it interpolates into the key itself,
+     * so message keys degrade readably instead of fataling.
+     *
+     * @param array<string, mixed> $replace
+     */
+    function __(string $key, array $replace = []): string
+    {
+        if (class_exists(\App\Core\Lang::class)) {
+            return \App\Core\Lang::get($key, $replace);
+        }
+        $text = $key;
+        foreach ($replace as $k => $v) {
+            $text = str_replace(':' . $k, (string) $v, $text);
+        }
+        return $text;
+    }
+}
+
+if (!function_exists('__n')) {
+    /**
+     * Plural-aware translation (CLDR categories via Lang::choice when loaded).
+     *
+     * @param array<string, mixed> $replace
+     */
+    function __n(string $key, int $count, array $replace = []): string
+    {
+        if (class_exists(\App\Core\Lang::class)) {
+            return \App\Core\Lang::choice($key, $count, $replace);
+        }
+        return __($key, $replace + ['count' => $count]);
+    }
+}
+
+if (!function_exists('view')) {
+    /**
+     * Render a PHP view template (app/Views/{template}.php), wrapped in a
+     * layout unless $layout is null. Returns the rendered HTML string.
+     * The richer component/section engine (Core/View) builds on top of this.
+     *
+     * @param array<string, mixed> $data
+     */
+    function view(string $template, array $data = [], ?string $layout = 'layouts/main'): string
+    {
+        $renderer = static function (string $tpl, array $vars): string {
+            extract($vars, EXTR_SKIP);
+            ob_start();
+            $path = base_path('app/Views/' . $tpl . '.php');
+            if (!is_file($path)) {
+                ob_end_clean();
+                throw new RuntimeException("View not found: $tpl");
+            }
+            require $path;
+            return (string) ob_get_clean();
+        };
+        $content = $renderer($template, $data);
+        if ($layout === null || !is_file(base_path('app/Views/' . $layout . '.php'))) {
+            return $content;
+        }
+        return $renderer($layout, array_merge($data, ['content' => $content]));
+    }
+}
+
 if (!function_exists('url')) {
     /** Absolute URL for an app path, based on config('app.url'). */
     function url(string $path = ''): string
