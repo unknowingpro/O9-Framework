@@ -53,6 +53,10 @@ class HttpException extends \RuntimeException
     public static function tooManyRequests(string $msg = ''): self                         { return self::make(ApiError::RATE_LIMITED, $msg); }
     public static function paymentRequired(string $msg = ''): self                         { return self::make(ApiError::PAYMENT_REQUIRED, $msg); }
     public static function server(string $msg = ''): self                                  { return self::make(ApiError::SERVER_ERROR, $msg); }
+    public static function csrfMismatch(string $msg = ''): self                            { return self::make(ApiError::CSRF_MISMATCH, $msg); }
+
+    /** @param array<string,mixed>|null $details */
+    public static function forceUpdate(string $msg = '', ?array $details = null): self      { return self::make(ApiError::FORCE_UPDATE, $msg, $details); }
 
     /** @param array<string,list<string>> $fieldErrors */
     public static function validation(array $fieldErrors, string $msg = ''): self

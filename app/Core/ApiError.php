@@ -20,6 +20,8 @@ final class ApiError
     public const RATE_LIMITED     = 'rate_limited';       // 429
     public const PAYMENT_REQUIRED = 'payment_required';   // 402
     public const SERVER_ERROR     = 'server_error';       // 500
+    public const CSRF_MISMATCH    = 'csrf_mismatch';      // 419
+    public const FORCE_UPDATE     = 'force_update';       // 426
 
     /** @return list<string> the canonical codes. */
     public static function codes(): array
@@ -27,6 +29,7 @@ final class ApiError
         return [
             self::BAD_REQUEST, self::VALIDATION, self::UNAUTHORIZED, self::FORBIDDEN,
             self::NOT_FOUND, self::CONFLICT, self::RATE_LIMITED, self::PAYMENT_REQUIRED, self::SERVER_ERROR,
+            self::CSRF_MISMATCH, self::FORCE_UPDATE,
         ];
     }
 
@@ -42,6 +45,8 @@ final class ApiError
             self::RATE_LIMITED     => 429,
             self::PAYMENT_REQUIRED => 402,
             self::SERVER_ERROR     => 500,
+            self::CSRF_MISMATCH    => 419,
+            self::FORCE_UPDATE     => 426,
             default                => 400,
         };
     }
@@ -59,6 +64,8 @@ final class ApiError
             self::RATE_LIMITED     => 'Too many requests. Please slow down.',
             self::PAYMENT_REQUIRED => 'Payment is required.',
             self::SERVER_ERROR     => 'An unexpected error occurred.',
+            self::CSRF_MISMATCH    => 'CSRF token mismatch.',
+            self::FORCE_UPDATE     => 'A newer app version is required.',
             default                => 'Request failed.',
         };
     }
