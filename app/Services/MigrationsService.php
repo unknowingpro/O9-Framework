@@ -12,6 +12,14 @@ use App\Core\Database;
  * Migrations are numbered .sql files in setup/database/migrations/ (spec
  * layout); the path is overridable via config('database.migrations_path')
  * or the constructor (tests).
+ *
+ * DDL dialects diverge too much between MySQL and SQLite to share one file
+ * (ENUM/AUTO_INCREMENT/ENGINE vs. SQLite's DDL and inline UNIQUE/INDEX
+ * syntax), so a migration ships as driver-suffixed siblings —
+ * `NNN_name.mysql.sql` and `NNN_name.sqlite.sql` — and available() returns
+ * only the sibling matching the active connection's driver. A plain
+ * `NNN_name.sql` with no driver suffix is treated as portable and applies
+ * to every driver.
  */
 final class MigrationsService
 {
@@ -34,10 +42,23 @@ final class MigrationsService
         return $rows;
     }
 
-    /** @return list<string> migration filenames available on disk, sorted. */
+    /**
+     * Migration filenames available on disk, sorted. Driver-suffixed
+     * siblings (see class docblock) are filtered to the active driver; a
+     * plain, unsuffixed `NNN_name.sql` applies to every driver.
+     *
+     * @return list<string>
+     */
     public function available(): array
     {
+        $driver = $this->db->driver();
         $files = glob($this->dir . '/*.sql') ?: [];
+        $files = array_values(array_filter($files, static function (string $path) use ($driver): bool {
+            if (preg_match('/\.(mysql|sqlite)\.sql$/', basename($path), $m) === 1) {
+                return $m[1] === $driver;
+            }
+            return true;
+        }));
         sort($files);
         return array_map('basename', $files);
     }

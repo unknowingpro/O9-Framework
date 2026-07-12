@@ -11,12 +11,10 @@ $samples = Metrics::collect();
 <p>Signed in as <strong><?= View::e($user['id'] ?? 'unknown') ?></strong>.</p>
 
 <h2>Worker liveness</h2>
-<?php if ($samples === []): ?>
-<p>No worker heartbeats yet — start a worker (e.g. <code>console queue:work</code>) to see it here.</p>
-<?php else: ?>
-<table>
+<p id="monitor-empty"<?= $samples === [] ? '' : ' hidden' ?>>No worker heartbeats yet — start a worker (e.g. <code>console queue:work</code>) to see it here.</p>
+<table id="monitor-table"<?= $samples === [] ? ' hidden' : '' ?>>
     <thead><tr><th>Metric</th><th>Worker</th><th>Value</th></tr></thead>
-    <tbody>
+    <tbody id="monitor-body">
     <?php foreach ($samples as $s): ?>
         <tr>
             <td><?= View::e($s['name']) ?></td>
@@ -26,6 +24,6 @@ $samples = Metrics::collect();
     <?php endforeach; ?>
     </tbody>
 </table>
-<?php endif; ?>
+<p class="refresh-hint">Auto-refreshes every 10s.</p>
 
 <p><a href="/api/v1/admin/monitor/metrics" target="_blank">Raw Prometheus output</a></p>

@@ -40,4 +40,13 @@ final class HashidTest extends TestCase
     {
         $this->assertSame('', Hashid::encode(-1));
     }
+
+    public function testAppKeyIsWiredIntoConfig(): void
+    {
+        // The shuffle salt (see class docblock) comes from config('app.key');
+        // config/app.php must actually forward APP_KEY into it, or the salt
+        // silently stays empty regardless of what's set in .env.
+        $this->assertSame((string) getenv('APP_KEY'), config('app.key'));
+        $this->assertNotSame('', config('app.key'));
+    }
 }

@@ -19,14 +19,9 @@ use App\Core\View;
     <?php if (Seo::jsonLdJson() !== null): ?>
     <script type="application/ld+json"><?= Seo::jsonLdJson() ?></script>
     <?php endif; ?>
-    <style>
-        body { font-family: system-ui, sans-serif; margin: 0; color: #1a1a1a; background: #fafafa; }
-        .container { max-width: 720px; margin: 0 auto; padding: 48px 24px; }
-        .flash { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; }
-        .flash-ok { background: #e6f4ea; color: #1e7e34; }
-        .flash-error { background: #fdecea; color: #b3261e; }
-        a { color: #2563eb; }
-    </style>
+    <link rel="stylesheet" href="<?= asset('assets/css/main.css') ?>">
+    <script type="module" src="<?= asset_module('assets/js/modules/core.js') ?>"></script>
+    <script type="module" src="<?= asset_module('assets/js/modules/ui.js') ?>"></script>
     <?= View::stack('head') ?>
 </head>
 <body>

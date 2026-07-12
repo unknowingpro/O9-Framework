@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Tests\Middleware;
 
+use App\Core\Cache\RedisConnection;
 use App\Core\HttpException;
 use App\Core\HttpResponse;
 use App\Core\Request;
@@ -25,6 +26,17 @@ final class RateLimitTest extends TestCase
         $_SESSION = [];
         foreach (glob(base_path('storage/data/ratelimit/*.json')) ?: [] as $f) {
             @unlink($f);
+        }
+        // RateLimit prefers Redis (see class docblock) when it's reachable —
+        // an environment with Redis running must clear its buckets too, or a
+        // later test/run reusing the same ip+path inherits a stale count and
+        // fails with a false "too many attempts" inside the fixed window.
+        $redis = RedisConnection::get();
+        if ($redis !== null) {
+            $prefix = rtrim((string) config('cache.prefix', 'o9:'), ':') . '_rl:';
+            foreach ($redis->keys($prefix . '*') as $rkey) {
+                $redis->del($rkey);
+            }
         }
     }
 

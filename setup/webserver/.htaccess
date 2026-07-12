@@ -1,0 +1,22 @@
+# Copy this file to the PROJECT ROOT only on hosts that won't let you point
+# the document root at public/ (typical of cheap shared hosting). It
+# transparently redirects every request into public/, so app/, config/,
+# storage/, setup/, .env and vendor/ never become web-reachable even though
+# they physically sit next to this file.
+#
+# If you control the document root, point it at public/ directly and use
+# setup/webserver/apache.htaccess (as public/.htaccess) instead — don't use
+# both at once.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+# Defense in depth in case the rewrite above is ever bypassed or disabled.
+<FilesMatch "\.(env|sql|sqlite|log)$">
+    Require all denied
+</FilesMatch>
+
+Options -Indexes

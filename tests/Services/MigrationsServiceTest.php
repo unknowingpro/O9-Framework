@@ -67,4 +67,30 @@ final class MigrationsServiceTest extends TestCase
         $this->assertFalse(Database::getInstance()->tableExists('mig_demo'));
         $this->assertSame(['001_bad.sql'], $svc->pending());
     }
+
+    public function testDriverSuffixedSiblingsAreFilteredToTheActiveDriver(): void
+    {
+        // phpunit runs on sqlite (phpunit.xml) — the .mysql.sql sibling must
+        // never even be considered, or applying it would blow up like the
+        // real setup/database/migrations ones used to before the fix.
+        file_put_contents($this->dir . '/001_x.mysql.sql', 'THIS IS NOT VALID SQLITE SQL AT ALL;');
+        file_put_contents($this->dir . '/001_x.sqlite.sql', 'CREATE TABLE mig_demo (id INTEGER PRIMARY KEY);');
+        file_put_contents($this->dir . '/002_portable.sql', "INSERT INTO mig_demo (id) VALUES (1);\n");
+
+        $svc = new MigrationsService($this->dir);
+        $this->assertSame(['001_x.sqlite.sql', '002_portable.sql'], $svc->available());
+        $this->assertSame(['001_x.sqlite.sql', '002_portable.sql'], $svc->applyAll());
+        $this->assertSame(1, Database::getInstance()->table('mig_demo')->count());
+    }
+
+    public function testRealMigrationsDirectoryResolvesOnlySqliteSiblingsUnderTheTestDriver(): void
+    {
+        $svc = new MigrationsService(); // default dir: setup/database/migrations
+        $available = $svc->available();
+        $this->assertNotEmpty($available);
+        foreach ($available as $name) {
+            $this->assertStringNotContainsString('.mysql.sql', $name);
+        }
+        $this->assertContains('001_languages.sqlite.sql', $available);
+    }
 }

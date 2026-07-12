@@ -1,0 +1,19 @@
+# Copy this file to public/.htaccess when the web server's document root IS
+# this project's public/ directory (the normal case — see setup/MIGRATION.md
+# / README for the recommended layout). Routes every request that isn't a
+# real file or directory through index.php, the single entry point.
+#
+# If your host won't let you set the document root to public/ at all, use
+# setup/webserver/.htaccess at the project root instead — not both.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>

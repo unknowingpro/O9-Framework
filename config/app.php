@@ -14,6 +14,9 @@ return [
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
 
     // ── Security ─────────────────────────────────────────────────────────
+    // Base64 32-byte key. Security\Crypto reads it via env() directly (fail-
+    // closed if absent); Hashid reads it here to salt its token alphabet.
+    'key' => env('APP_KEY', ''),
     'jwt' => [
         'secret' => env('JWT_SECRET', ''),
         'ttl'    => (int) env('JWT_TTL', 86400),

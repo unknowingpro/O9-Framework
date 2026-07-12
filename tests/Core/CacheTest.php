@@ -17,6 +17,16 @@ final class CacheTest extends TestCase
         Cache::setStore(null);
     }
 
+    /** getmypid() is constant for the whole run, so every test above shares one dir — remove it once, after all of them. */
+    public static function tearDownAfterClass(): void
+    {
+        $dir = sys_get_temp_dir() . '/o9-cache-test-' . getmypid();
+        if (is_dir($dir)) {
+            (new FileCacheStore($dir))->flush();
+            @rmdir($dir);
+        }
+    }
+
     /** @return list<array{0: CacheStore}> */
     public static function stores(): array
     {
