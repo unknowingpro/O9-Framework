@@ -9,32 +9,38 @@ namespace App\Core;
  */
 final class Response
 {
-    /** @param array<string, mixed> $payload */
+    /**
+     * @param array<string, mixed> $payload
+     *
+     * Builds the response as an {@see HttpResponse} and throws it — App::run()
+     * (and the global exception handler, as a fallback) catch it and emit it.
+     * This is the same short-circuit mechanism View::redirect()/Router 404s
+     * already use, extended to success responses so a controller action can be
+     * unit-tested by catching HttpResponse instead of needing a process exit.
+     */
     public static function json(array $payload, int $status = 200): never
     {
         $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if ($encoded === false) {
             error_log('Response::json encoding failed: ' . json_last_error_msg() . ' — payload keys: ' . implode(',', array_keys($payload)));
             $fallback = '{"ok":false,"data":null,"error":{"code":"encoding_error","message":"response encoding failed"}}';
-            http_response_code(500);
-            header('Content-Type: application/json; charset=utf-8');
-            header('X-API-Version: 1');
-            if (ApiContext::active()) {
-                header('X-Request-Id: ' . ApiContext::id());
-            }
-            header('Content-Length: ' . strlen($fallback));
-            echo $fallback;
-            exit;
+            throw new HttpResponse(500, $fallback, self::jsonHeaders(strlen($fallback)));
         }
-        http_response_code($status);
-        header('Content-Type: application/json; charset=utf-8');
-        header('X-API-Version: 1');
+        throw new HttpResponse($status, $encoded, self::jsonHeaders(strlen($encoded)));
+    }
+
+    /** @return array<string, string> */
+    private static function jsonHeaders(int $contentLength): array
+    {
+        $headers = [
+            'Content-Type'   => 'application/json; charset=utf-8',
+            'X-API-Version'  => '1',
+            'Content-Length' => (string) $contentLength,
+        ];
         if (ApiContext::active()) {
-            header('X-Request-Id: ' . ApiContext::id());
+            $headers['X-Request-Id'] = ApiContext::id();
         }
-        header('Content-Length: ' . strlen($encoded));
-        echo $encoded;
-        exit;
+        return $headers;
     }
 
     /** @param array<string, mixed> $meta */
@@ -70,32 +76,20 @@ final class Response
         if ($encoded === false) {
             error_log('Response::okCached encoding failed: ' . json_last_error_msg());
             $fallback = '{"ok":false,"data":null,"error":{"code":"encoding_error","message":"response encoding failed"}}';
-            http_response_code(500);
-            header('Content-Type: application/json; charset=utf-8');
-            header('X-API-Version: 1');
-            if (ApiContext::active()) {
-                header('X-Request-Id: ' . ApiContext::id());
-            }
-            header('Content-Length: ' . strlen($fallback));
-            echo $fallback;
-            exit;
+            throw new HttpResponse(500, $fallback, self::jsonHeaders(strlen($fallback)));
         }
         $json = $encoded;
         $etag = self::etagFor($json);
-        header('ETag: ' . $etag);
-        header('Cache-Control: private, must-revalidate');
+        $headers = ['ETag' => $etag, 'Cache-Control' => 'private, must-revalidate'];
         if (ApiContext::active()) {
-            header('X-Request-Id: ' . ApiContext::id());
+            $headers['X-Request-Id'] = ApiContext::id();
         }
         if (self::etagSatisfies((string) ($_SERVER['HTTP_IF_NONE_MATCH'] ?? ''), $etag)) {
-            http_response_code(304);
-            exit;
+            throw new HttpResponse(304, '', $headers);
         }
-        http_response_code(200);
-        header('Content-Type: application/json; charset=utf-8');
-        header('X-API-Version: 1');
-        echo $json;
-        exit;
+        $headers['Content-Type']  = 'application/json; charset=utf-8';
+        $headers['X-API-Version'] = '1';
+        throw new HttpResponse(200, $json, $headers);
     }
 
     /** Strong ETag for a serialized body. */
@@ -175,10 +169,7 @@ final class Response
 
     public static function html(string $html, int $status = 200): never
     {
-        http_response_code($status);
-        header('Content-Type: text/html; charset=utf-8');
-        echo $html;
-        exit;
+        throw new HttpResponse($status, $html, ['Content-Type' => 'text/html; charset=utf-8']);
     }
 
     /**

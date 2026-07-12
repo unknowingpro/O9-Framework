@@ -272,11 +272,22 @@ class App
             }
             http_response_code(500);
             if ($this->request->wantsJson()) {
-                Response::json(['ok' => false, 'data' => null, 'error' => [
-                    'code' => 'server_error',
-                    'message' => $debug ? (string) $err['message'] : 'Internal server error',
-                    'ref' => $ref,
-                ]], 500);
+                // Response::json() throws HttpResponse rather than exiting (see
+                // Response.php) — a throw escaping a shutdown-function callback is
+                // NOT routed to set_exception_handler (verified empirically), so
+                // it must be caught and sent right here or a fatal error would
+                // silently produce PHP's raw uncaught-exception output instead of
+                // this structured 500.
+                try {
+                    Response::json(['ok' => false, 'data' => null, 'error' => [
+                        'code' => 'server_error',
+                        'message' => $debug ? (string) $err['message'] : 'Internal server error',
+                        'ref' => $ref,
+                    ]], 500);
+                } catch (HttpResponse $r) {
+                    $r->send();
+                }
+                return;
             }
             echo '<!doctype html><meta charset="utf-8"><title>500</title>'
                 . '<div style="font-family:sans-serif;padding:48px;text-align:center"><h1>500</h1><p>Something went wrong.</p>'
@@ -315,7 +326,16 @@ class App
                 if ($details !== null)            { $err['details'] = $details; }
                 if ($ref !== '')                  { $err['ref'] = $ref; }
                 if ($debug && $isServer)          { $err['trace'] = explode("\n", $e->getTraceAsString()); }
-                Response::json(['ok' => false, 'data' => null, 'error' => $err], $status);
+                // Response::json() throws HttpResponse rather than exiting — a throw
+                // escaping this handler is NOT re-delivered to it (verified
+                // empirically: PHP treats that as an uncaught fatal, not a nested
+                // handler call), so it must be caught and sent right here.
+                try {
+                    Response::json(['ok' => false, 'data' => null, 'error' => $err], $status);
+                } catch (HttpResponse $r) {
+                    $r->send();
+                }
+                return;
             }
             http_response_code($status);
             // Debug + real fault → raw message + trace for the developer. Otherwise a

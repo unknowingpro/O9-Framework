@@ -4,15 +4,46 @@ declare(strict_types=1);
 namespace Tests\Controllers\Admin;
 
 use App\Controllers\Admin\AdminApiController;
+use App\Core\Auth;
+use App\Core\HttpResponse;
+use App\Core\Request;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
 final class AdminApiControllerTest extends TestCase
 {
-    // whoami() itself can't be exercised end-to-end: Response::ok() -> Response::json()
-    // calls exit() on success (by design — see Response.php), which would kill the
-    // PHPUnit process. sanitize() holds the actual security-relevant logic, so it's
-    // tested directly via reflection rather than skipping coverage entirely.
+    protected function tearDown(): void
+    {
+        Auth::reset();
+        $_SESSION = [];
+    }
+
+    public function testWhoamiNeverLeaksThePasswordHashEvenWhenTheResolverReturnsTheRawRow(): void
+    {
+        // End-to-end coverage, made possible by Response::ok() throwing HttpResponse
+        // instead of exiting the process — previously the only way to test this
+        // controller at all was reflecting into sanitize() directly (see below).
+        Auth::resolveUserUsing(fn (int $id): array => [
+            'id'            => $id,
+            'email'         => 'admin@example.com',
+            'password_hash' => '$2y$10$somehashvaluehere',
+            'roles'         => 'admin',
+        ]);
+        $_SESSION['user_id'] = 1;
+
+        try {
+            (new AdminApiController())->whoami(new Request());
+            $this->fail('expected HttpResponse to be thrown');
+        } catch (HttpResponse $r) {
+            $body = json_decode((string) $r->payload, true);
+            $this->assertArrayNotHasKey('password_hash', $body['data']['user']);
+            $this->assertSame('admin@example.com', $body['data']['user']['email']);
+        }
+    }
+
+    // sanitize() also gets direct reflection-based coverage of its edge cases
+    // (null input, a row with no password_hash to begin with) that would be
+    // awkward to set up through the full Auth::resolveUserUsing() path above.
     private function sanitize(?array $user): ?array
     {
         $m = new ReflectionMethod(AdminApiController::class, 'sanitize');
