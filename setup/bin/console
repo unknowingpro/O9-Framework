@@ -27,5 +27,6 @@ $kernel->register(new App\Console\Commands\MakeControllerCommand());
 $kernel->register(new App\Console\Commands\MakeModelCommand());
 $kernel->register(new App\Console\Commands\MakeMiddlewareCommand());
 $kernel->register(new App\Console\Commands\MakeJobCommand());
+$kernel->register(new App\Console\Commands\SeedCommand());
 
 exit($kernel->handle($argv));
