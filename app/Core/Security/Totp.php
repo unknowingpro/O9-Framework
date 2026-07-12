@@ -12,6 +12,47 @@ namespace App\Core\Security;
  */
 final class Totp
 {
+    /** A fresh, cryptographically random base32 secret (RFC 4648 alphabet) encoding 160 bits (20 raw bytes). */
+    public static function generateSecret(): string
+    {
+        return self::base32Encode(random_bytes(20));
+    }
+
+    /** RFC 4648 base32 encode, the inverse of base32Decode() below — no padding, uppercase. */
+    private static function base32Encode(string $raw): string
+    {
+        $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+        $bits = '';
+        foreach (str_split($raw) as $byte) {
+            $bits .= str_pad(decbin(ord($byte)), 8, '0', STR_PAD_LEFT);
+        }
+        $out = '';
+        foreach (str_split($bits, 5) as $chunk) {
+            $out .= $alphabet[(int) bindec(str_pad($chunk, 5, '0'))];
+        }
+        return $out;
+    }
+
+    /**
+     * A fresh set of single-use MFA recovery codes for when a user loses
+     * their authenticator device. Returns the plaintext codes to show the
+     * user ONCE — store only their hashes (Hash::make() on each) and check
+     * an entered code with Hash::check(); never persist the plaintext.
+     *
+     * @return list<string>
+     */
+    public static function generateRecoveryCodes(int $count = 10): array
+    {
+        $codes = [];
+        for ($i = 0; $i < $count; $i++) {
+            // 8 hex chars (32 bits): short enough to type back, and — like
+            // any other credential here — single-use and rate-limited, not
+            // relied on for entropy alone.
+            $codes[] = bin2hex(random_bytes(4));
+        }
+        return $codes;
+    }
+
     /** Verify a user-entered 6-digit code against a base32-encoded secret. */
     public static function verify(string $base32Secret, string $code, int $window = 1): bool
     {

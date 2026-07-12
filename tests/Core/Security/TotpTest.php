@@ -49,6 +49,34 @@ final class TotpTest extends TestCase
         $this->assertFalse(Totp::verify('', '123456'));
     }
 
+    public function testGenerateSecretProducesAValidBase32SecretUsableByVerify(): void
+    {
+        $secret = Totp::generateSecret();
+        $this->assertSame(32, strlen($secret));
+        $this->assertMatchesRegularExpression('/^[A-Z2-7]{32}$/', $secret);
+        $this->assertNotSame($secret, Totp::generateSecret());
+
+        // Round-trip: a code computed for this generated secret must verify —
+        // proves it decodes to real usable key material, not just the right shape.
+        $m = new \ReflectionMethod(Totp::class, 'base32Decode');
+        $raw = (string) $m->invoke(null, $secret);
+        $bucket = (int) floor(time() / 30);
+        $this->assertTrue(Totp::verify($secret, $this->compute($raw, $bucket)));
+    }
+
+    public function testGenerateRecoveryCodesProducesTheRequestedCountOfUniqueCodes(): void
+    {
+        $codes = Totp::generateRecoveryCodes(10);
+        $this->assertCount(10, $codes);
+        $this->assertCount(10, array_unique($codes), 'every code must be unique');
+        foreach ($codes as $code) {
+            $this->assertMatchesRegularExpression('/^[0-9a-f]{8}$/', $code);
+        }
+
+        $this->assertCount(5, Totp::generateRecoveryCodes(5));
+        $this->assertNotSame(Totp::generateRecoveryCodes(10), Totp::generateRecoveryCodes(10));
+    }
+
     public function testProvisioningUriFormat(): void
     {
         $uri = Totp::provisioningUri('O9 App', 'user@example.com', 'JBSWY3DPEHPK3PXP');
