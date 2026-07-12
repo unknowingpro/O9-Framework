@@ -119,7 +119,7 @@ final class RealMigrationsIntegrationTest extends TestCase
     public function testUserModelRegistersAndFindsAgainstTheRealUsersTable(): void
     {
         $model = new UserModel();
-        $id = $model->register('real-migration@example.com', 'secret-pass', 'admin');
+        $id = $model->register('real-migration@example.com', 'Real-Migration-Pass1', 'admin');
         $row = $model->findByEmail('real-migration@example.com');
         $this->assertSame($id, (int) $row['id']);
     }

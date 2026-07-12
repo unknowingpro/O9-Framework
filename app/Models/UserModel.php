@@ -5,6 +5,7 @@ namespace App\Models;
 
 use App\Core\BaseModel;
 use App\Core\Security\Hash;
+use App\Services\PasswordValidator;
 
 /**
  * Sample model: the `users` table (see setup/database/migrations/007_users.sql).
@@ -24,9 +25,18 @@ final class UserModel extends BaseModel
         return $this->table()->where('email', '=', $email)->first();
     }
 
-    /** @return int the new user's id */
+    /**
+     * @return int the new user's id
+     * @throws \InvalidArgumentException if $password fails PasswordValidator — enforced
+     *         here (not just client-side), since this is the actual write path regardless of caller.
+     */
     public function register(string $email, string $password, string $roles = ''): int
     {
+        $passwordError = PasswordValidator::validate($password);
+        if ($passwordError !== null) {
+            throw new \InvalidArgumentException($passwordError);
+        }
+
         return $this->create([
             'email'         => $email,
             'password_hash' => Hash::make($password),
