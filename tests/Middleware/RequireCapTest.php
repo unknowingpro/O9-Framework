@@ -6,6 +6,7 @@ namespace Tests\Middleware;
 use App\Core\Auth as CoreAuth;
 use App\Core\Database;
 use App\Core\HttpException;
+use App\Core\Logger;
 use App\Core\Request;
 use App\Middleware\RequireCap;
 use PHPUnit\Framework\TestCase;
@@ -19,6 +20,7 @@ final class RequireCapTest extends TestCase
         $this->serverBackup = $_SERVER;
         CoreAuth::reset();
         RequireCap::auditUsing(null);
+        Logger::reset();
         $_SESSION = [];
 
         $db = Database::getInstance();
@@ -36,6 +38,7 @@ final class RequireCapTest extends TestCase
         $_SERVER = $this->serverBackup;
         CoreAuth::reset();
         RequireCap::auditUsing(null);
+        Logger::reset();
         $_SESSION = [];
     }
 
@@ -80,6 +83,29 @@ final class RequireCapTest extends TestCase
             $this->assertSame(403, $e->status);
             throw $e;
         }
+    }
+
+    public function testLogsASecurityEventWhenTheCapabilityIsDenied(): void
+    {
+        CoreAuth::resolveUserUsing(fn (int $id): array => ['id' => $id]);
+        $_SESSION['user_id'] = 1;
+
+        $seen = null;
+        Logger::persistUsing(function (string $channel, array $entry) use (&$seen): void {
+            $seen = [$channel, $entry];
+        });
+
+        try {
+            (new RequireCap('moderation'))->handle($this->req());
+        } catch (HttpException) {
+            // expected — asserting on the log side effect, not the exception here
+        }
+
+        $this->assertNotNull($seen);
+        [$channel, $entry] = $seen;
+        $this->assertSame('security', $channel);
+        $this->assertSame('auth.capability_denied', $entry['msg']);
+        $this->assertSame('moderation', $entry['cap']);
     }
 
     public function testPassesWithTheCapability(): void

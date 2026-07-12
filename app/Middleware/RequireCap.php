@@ -5,6 +5,7 @@ namespace App\Middleware;
 
 use App\Core\Auth;
 use App\Core\HttpException;
+use App\Core\Logger;
 use App\Core\Middleware;
 use App\Core\Request;
 use App\Identity\Rbac;
@@ -47,6 +48,15 @@ final class RequireCap implements Middleware
         }
         $user = Auth::user();
         if ($user === null || !Rbac::can($user, $cap)) {
+            if (class_exists(Logger::class)) {
+                Logger::warning('auth.capability_denied', [
+                    'ip'     => $request->ip(),
+                    'uid'    => Auth::id(),
+                    'cap'    => $cap,
+                    'method' => $request->method(),
+                    'path'   => $request->path(),
+                ], 'security');
+            }
             throw HttpException::forbidden();
         }
         if (self::$auditor !== null && !in_array(strtoupper($request->method()), ['GET', 'HEAD', 'OPTIONS'], true)) {

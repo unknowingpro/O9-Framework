@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Middleware;
 
 use App\Core\HttpException;
+use App\Core\Logger;
 use App\Core\Middleware;
 use App\Core\Request;
 use App\Core\Session;
@@ -65,6 +66,13 @@ final class VerifyCsrf implements Middleware
 
     private function reject(Request $request): never
     {
+        if (class_exists(Logger::class)) {
+            Logger::warning('auth.csrf_rejected', [
+                'ip'     => $request->ip(),
+                'method' => $request->method(),
+                'path'   => $request->path(),
+            ], 'security');
+        }
         if ($request->wantsJson()) {
             throw HttpException::csrfMismatch();
         }

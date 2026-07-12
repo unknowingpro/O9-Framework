@@ -5,6 +5,7 @@ namespace Tests\Middleware;
 
 use App\Core\HttpException;
 use App\Core\HttpResponse;
+use App\Core\Logger;
 use App\Core\Request;
 use App\Middleware\VerifyCsrf;
 use PHPUnit\Framework\TestCase;
@@ -16,6 +17,7 @@ final class VerifyCsrfTest extends TestCase
     protected function setUp(): void
     {
         $this->serverBackup = $_SERVER;
+        Logger::reset();
         $_SESSION = [];
         $_POST = [];
     }
@@ -23,6 +25,7 @@ final class VerifyCsrfTest extends TestCase
     protected function tearDown(): void
     {
         $_SERVER = $this->serverBackup;
+        Logger::reset();
         $_SESSION = [];
         $_POST = [];
     }
@@ -54,6 +57,29 @@ final class VerifyCsrfTest extends TestCase
         $_POST['_csrf'] = 'token-value';
         (new VerifyCsrf())->handle($this->req('POST', '/web/form'));
         $this->addToAssertionCount(1);
+    }
+
+    public function testLogsASecurityEventWhenTheTokenIsRejected(): void
+    {
+        $_SESSION['_csrf'] = 'expected';
+        $_POST['_csrf'] = 'wrong';
+        $_SERVER['HTTP_ACCEPT'] = 'application/json';
+
+        $seen = null;
+        Logger::persistUsing(function (string $channel, array $entry) use (&$seen): void {
+            $seen = [$channel, $entry];
+        });
+
+        try {
+            (new VerifyCsrf())->handle($this->req('POST', '/web/form'));
+        } catch (HttpException) {
+            // expected — asserting on the log side effect, not the exception here
+        }
+
+        $this->assertNotNull($seen);
+        [$channel, $entry] = $seen;
+        $this->assertSame('security', $channel);
+        $this->assertSame('auth.csrf_rejected', $entry['msg']);
     }
 
     public function testMismatchedTokenOnJsonRequestThrows(): void

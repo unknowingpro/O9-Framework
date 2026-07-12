@@ -6,6 +6,7 @@ namespace Tests\Middleware;
 use App\Core\Cache\RedisConnection;
 use App\Core\HttpException;
 use App\Core\HttpResponse;
+use App\Core\Logger;
 use App\Core\Request;
 use App\Middleware\RateLimit;
 use PHPUnit\Framework\TestCase;
@@ -17,12 +18,14 @@ final class RateLimitTest extends TestCase
     protected function setUp(): void
     {
         $this->serverBackup = $_SERVER;
+        Logger::reset();
         $_SESSION = [];
     }
 
     protected function tearDown(): void
     {
         $_SERVER = $this->serverBackup;
+        Logger::reset();
         $_SESSION = [];
         foreach (glob(base_path('storage/data/ratelimit/*.json')) ?: [] as $f) {
             @unlink($f);
@@ -72,6 +75,29 @@ final class RateLimitTest extends TestCase
             $this->assertSame(429, $e->status);
             throw $e;
         }
+    }
+
+    public function testLogsASecurityEventWhenTheLimitIsExceeded(): void
+    {
+        $rl = new RateLimit(1, 60);
+        $ip = '203.0.113.20';
+        $rl->handle($this->apiRequest('POST', '/api/v1/logged', $ip));
+
+        $seen = null;
+        Logger::persistUsing(function (string $channel, array $entry) use (&$seen): void {
+            $seen = [$channel, $entry];
+        });
+
+        try {
+            $rl->handle($this->apiRequest('POST', '/api/v1/logged', $ip));
+        } catch (HttpException) {
+            // expected — asserting on the log side effect, not the exception here
+        }
+
+        $this->assertNotNull($seen);
+        [$channel, $entry] = $seen;
+        $this->assertSame('security', $channel);
+        $this->assertSame('auth.rate_limited', $entry['msg']);
     }
 
     public function testDifferentPathsGetIndependentBuckets(): void

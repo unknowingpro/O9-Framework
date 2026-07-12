@@ -5,6 +5,7 @@ namespace App\Middleware;
 
 use App\Core\Cache\RedisConnection;
 use App\Core\HttpException;
+use App\Core\Logger;
 use App\Core\Middleware;
 use App\Core\Request;
 use App\Core\Session;
@@ -58,6 +59,15 @@ class RateLimit implements Middleware
         if ($bucket['count'] > $this->limit()) {
             $retry = max(1, $bucket['reset'] - $now);
             header('Retry-After: ' . $retry);
+            if (class_exists(Logger::class)) {
+                Logger::warning('auth.rate_limited', [
+                    'ip'     => $request->ip(),
+                    'method' => $request->method(),
+                    'path'   => $request->path(),
+                    'count'  => $bucket['count'],
+                    'limit'  => $this->limit(),
+                ], 'security');
+            }
             if ($request->wantsJson()) {
                 throw HttpException::tooManyRequests('Too many attempts. Try again later.');
             }
