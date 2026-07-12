@@ -78,9 +78,30 @@ function o9_setup_random_app_key(): string
 }
 
 /**
+ * True if $rawValue is blank by App\Core\Env's own rules: unquoted empty,
+ * quoted empty ('' / ""), or one of Env::coerce()'s blank/null sentinel
+ * literals. Mirroring that vocabulary here matters — a value this function
+ * misjudges as "already set" is a secret ensure_secret() will never fill in.
+ */
+function o9_setup_is_blank_env_value(string $rawValue): bool
+{
+    $value = trim($rawValue);
+    if (strlen($value) >= 2
+        && ($value[0] === '"' || $value[0] === "'")
+        && $value[strlen($value) - 1] === $value[0]) {
+        $value = substr($value, 1, -1);
+    }
+    return match (strtolower($value)) {
+        '', 'null', '(null)', 'empty', '(empty)' => true,
+        default => false,
+    };
+}
+
+/**
  * Sets KEY= in the .env file at $envPath to $value, but only when the
- * existing value is blank — never overwrites a secret that's already set.
- * Appends a new KEY=value line if the key isn't present at all.
+ * existing value is blank per o9_setup_is_blank_env_value() — never
+ * overwrites a secret that's already set. Appends a new KEY=value line if
+ * the key isn't present at all.
  */
 function o9_setup_ensure_secret(string $envPath, string $key, string $value): bool
 {
@@ -95,7 +116,7 @@ function o9_setup_ensure_secret(string $envPath, string $key, string $value): bo
             continue;
         }
         $found = true;
-        if (trim(substr($line, strlen($key) + 1)) !== '') {
+        if (!o9_setup_is_blank_env_value(substr($line, strlen($key) + 1))) {
             return false; // already set — leave it alone
         }
         $lines[$i] = $key . '=' . $value;
@@ -144,9 +165,9 @@ function o9_setup_scaffold_storage_dirs(string $root): array
 
 /**
  * Applies pending migrations against whatever DB config/database.php
- * currently resolves to. Best-effort: a DB that isn't reachable yet is
- * reported, not thrown — first boot can configure the DB afterwards and
- * run `php setup/bin/console migrate`.
+ * currently resolves to. Best-effort: any failure — the DB isn't reachable
+ * yet, or a migration file itself is broken — is reported, not thrown, so
+ * first boot can fix it afterwards and run `php setup/bin/console migrate`.
  *
  * @return array{applied: list<string>, error: ?string}
  */
@@ -162,13 +183,9 @@ function o9_setup_run_migrations(string $root): array
     require_once $root . '/config/env.php';
 
     try {
-        $svc = new \App\Services\MigrationsService();
-        $pending = $svc->pending();
-        if ($pending === []) {
-            return ['applied' => [], 'error' => null];
-        }
-
-        return ['applied' => $svc->applyAll(), 'error' => null];
+        // applyAll() already no-ops safely when nothing is pending, so no
+        // separate pending()-then-applyAll() pre-check is needed here.
+        return ['applied' => (new \App\Services\MigrationsService())->applyAll(), 'error' => null];
     } catch (\Throwable $e) {
         return ['applied' => [], 'error' => $e->getMessage()];
     }
@@ -207,8 +224,9 @@ function o9_setup_main(array $argv): int
     fwrite(STDOUT, "\nMigrations:\n");
     $migrations = o9_setup_run_migrations($root);
     if ($migrations['error'] !== null) {
-        fwrite(STDOUT, "  skipped — database not reachable yet ({$migrations['error']})\n");
-        fwrite(STDOUT, "  configure config/database.php / DB_* in .env, then run: php setup/bin/console migrate\n");
+        fwrite(STDOUT, "  could not apply: {$migrations['error']}\n");
+        fwrite(STDOUT, "  fix the issue above (DB connectivity/credentials in .env, or the migration file it names),\n");
+        fwrite(STDOUT, "  then run: php setup/bin/console migrate\n");
     } elseif ($migrations['applied'] === []) {
         fwrite(STDOUT, "  nothing to apply.\n");
     } else {

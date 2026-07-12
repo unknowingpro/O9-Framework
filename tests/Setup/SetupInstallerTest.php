@@ -114,6 +114,28 @@ final class SetupInstallerTest extends TestCase
         $this->assertStringContainsString('NEW_SECRET=value', (string) file_get_contents($envPath));
     }
 
+    /**
+     * @dataProvider blankEnvValueVocabulary
+     */
+    public function testEnsureSecretRecognizesEveryBlankFormEnvItselfWouldResolveToNothing(string $blankForm): void
+    {
+        // App\Core\Env::coerce() treats these as blank/null at runtime (quoted
+        // empty strings, and the null/empty sentinel literals) — if this
+        // function doesn't recognize the same forms as blank, it believes a
+        // secret is "already set" when it actually resolves to nothing.
+        $envPath = $this->root . '/.env';
+        file_put_contents($envPath, "JWT_SECRET={$blankForm}\n");
+
+        $this->assertTrue(\o9_setup_ensure_secret($envPath, 'JWT_SECRET', 'generated-value'), "value: {$blankForm}");
+        $this->assertStringContainsString('JWT_SECRET=generated-value', (string) file_get_contents($envPath));
+    }
+
+    /** @return list<list<string>> */
+    public static function blankEnvValueVocabulary(): array
+    {
+        return [[''], ['""'], ["''"], ['null'], ['NULL'], ['(null)'], ['empty'], ['(empty)']];
+    }
+
     public function testScaffoldStorageDirsIsIdempotent(): void
     {
         $created = \o9_setup_scaffold_storage_dirs($this->root);

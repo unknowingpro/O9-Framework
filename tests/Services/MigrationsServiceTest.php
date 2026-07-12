@@ -83,6 +83,20 @@ final class MigrationsServiceTest extends TestCase
         $this->assertSame(1, Database::getInstance()->table('mig_demo')->count());
     }
 
+    public function testAnUnrecognizedDriverSuffixIsExcludedNotTreatedAsPortable(): void
+    {
+        // A suffix naming a driver this framework doesn't ship (or a typo of
+        // "sqlite"/"mysql") must never fall through to "no suffix, portable,
+        // applies everywhere" — that would run driver-foreign DDL against
+        // whatever connection happens to be active.
+        file_put_contents($this->dir . '/001_x.postgres.sql', 'THIS IS NOT SQL FOR ANY DRIVER HERE;');
+        file_put_contents($this->dir . '/001_x.sqlite.sql', 'CREATE TABLE mig_demo (id INTEGER PRIMARY KEY);');
+
+        $svc = new MigrationsService($this->dir);
+        $this->assertSame(['001_x.sqlite.sql'], $svc->available());
+        $this->assertSame(['001_x.sqlite.sql'], $svc->applyAll());
+    }
+
     public function testRealMigrationsDirectoryResolvesOnlySqliteSiblingsUnderTheTestDriver(): void
     {
         $svc = new MigrationsService(); // default dir: setup/database/migrations

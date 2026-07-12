@@ -54,7 +54,11 @@ final class MigrationsService
         $driver = $this->db->driver();
         $files = glob($this->dir . '/*.sql') ?: [];
         $files = array_values(array_filter($files, static function (string $path) use ($driver): bool {
-            if (preg_match('/\.(mysql|sqlite)\.sql$/', basename($path), $m) === 1) {
+            // Any single dot-segment right before .sql is a driver tag —
+            // not just the two drivers this framework ships today. An
+            // unrecognized tag (e.g. a future .postgres.sql, or a typo)
+            // must be excluded here, not silently treated as portable.
+            if (preg_match('/\.([a-z0-9]+)\.sql$/', basename($path), $m) === 1) {
                 return $m[1] === $driver;
             }
             return true;
