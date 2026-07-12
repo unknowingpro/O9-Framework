@@ -59,7 +59,21 @@ td {
     border-bottom: 1px solid #e5e7eb;
 }
 
+/* Keeps a wide table scrolling within its own box on narrow viewports
+   instead of pushing the whole page into horizontal scroll. */
+.table-scroll {
+    overflow-x: auto;
+}
+
 .refresh-hint {
     color: #6b7280;
     font-size: 0.85em;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: 2px;
 }

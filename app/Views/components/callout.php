@@ -6,7 +6,7 @@
  */
 use App\Core\View;
 ?>
-<div style="border:1px solid #dfe3e8;border-radius:8px;padding:16px 20px;background:#fff;margin:20px 0">
+<div class="callout">
     <strong><?= View::e($title) ?></strong>
-    <div style="margin-top:8px"><?= $slot ?></div>
+    <div class="callout-body"><?= $slot ?></div>
 </div>
