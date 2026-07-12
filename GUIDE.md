@@ -211,6 +211,28 @@ final class ItemModel extends BaseModel
 `BaseModel` provides `find() create() updateById() deleteById() softDeleteById()`
 and `table()` for the builder. Every value is bound — never interpolate into SQL.
 
+**Cache-aware models** extend `CachedModel` instead of `BaseModel`. `find()` is
+wrapped in `CacheManager::remember()` and auto-evicted on writes, so a second
+call to the same ID hits cache instead of the database:
+
+```php
+final class ProductModel extends CachedModel
+{
+    protected string $table = 'products';
+    protected ?int $cacheTtl = 300;              // default: config('cache.default_ttl', 3600)
+}
+
+$model = new ProductModel();
+$p = $model->find(1);        // DB query — cached
+$p = $model->find(1);        // from cache
+
+$model->updateById(1, ['price' => 9.99]);         // evicts that ID
+$model->deleteById(1);                             // evicts ID + all cache
+$model->cachedAll();                               // all rows, cached
+$model->forgetFind(1);                             // manual eviction
+$model->forgetAll();                               // evict the all-cache
+```
+
 **Resources are how a row becomes a response.** A resource is an allow-list, so a
 column you add to the table later stays invisible to the API until you opt it in.
 This is the opposite of returning the row and `unset()`-ing the secrets, which
@@ -262,6 +284,25 @@ so you can validate in a service or a console command and decide what to do.
 Add a project rule with
 `Validator::extend('iban', fn (string $field, mixed $value, ?string $param) => ...)`
 — return an error message, or `null` when it passes.
+
+**File upload validation.** `UploadValidator` validates a `$_FILES` entry against
+MIME type (sniffed via finfo, not the client header) and size:
+
+```php
+$result = UploadValidator::validate($_FILES['avatar'], [
+    'mimes'    => ['jpg', 'jpeg', 'png', 'webp'],
+    'max_size' => 2048,              // KB
+    'required' => true,
+]);
+
+if (!$result['valid']) {
+    // $result['errors'] — list of error messages
+}
+// $result['data'] — ['tmp_name', 'name', 'size', 'mime', 'ext'] on success
+
+UploadValidator::passes($_FILES['avatar'], ['mimes' => ['png']]);        // bool
+UploadValidator::validData($_FILES['avatar'], ['mimes' => ['png']]);     // array|null
+```
 
 ## 9. Auth and security
 
@@ -378,13 +419,36 @@ php setup/bin/console migrate
 php setup/bin/console queue:work
 php setup/bin/console schedule:run
 php setup/bin/console cache:clear
+php setup/bin/console db:seed
 php setup/bin/console make:controller ItemController
 php setup/bin/console make:model ItemModel
 php setup/bin/console make:job SendReportJob
 php setup/bin/console make:middleware RequireTeam
 ```
 
-Write your own by extending `Console\Command` and registering it in
+**Seeders** populate the database with reference or test data. Write a seeder in
+`setup/database/seeders/` that extends `Seeder`:
+
+```php
+final class RegionSeeder extends Seeder
+{
+    public function run(array $args = []): void
+    {
+        if ($this->isFresh($args)) {
+            $this->truncate('regions');
+        }
+        Db::insert("INSERT INTO regions (code, name) VALUES (?, ?)", ['eu', 'Europe']);
+    }
+}
+```
+
+```bash
+php setup/bin/console db:seed                  # run all seeders
+php setup/bin/console db:seed --class=Region   # run one
+php setup/bin/console db:seed --fresh          # truncate first
+```
+
+Write your own command by extending `Console\Command` and registering it in
 `Console\Kernel`. Schedule work in `Console\Schedule`, then point cron at
 `schedule:run` once a minute (see `setup/scripts/cron.sh`).
 
@@ -433,6 +497,7 @@ that turns it off.
 | `Url` | `Url::safe($raw)` — only `http(s)` with a host survives; blocks `javascript:`/`data:`/`file:`. `Url::mediaDiskPath($url)` resolves a media URL to disk **only if it stays inside the upload root** — use it before any `unlink()`/`rename()` driven by a DB column. |
 | `Lock` | flock single-instance guard (§15). |
 | `Csv`, `Paginator`, `Hashid`, `Seo`, `HttpClient`, `CircuitBreaker` | CSV I/O, page/cursor pagination, opaque public ids, meta/JSON-LD tags, cURL with retries, and a breaker for flaky upstreams. |
+| `Image` | GD-based resize, crop, centre-crop thumbnail, re-compress/strip EXIF — zero dependencies. `Image::resize($src, 800, 600, $out)`, `Image::crop()`, `Image::thumbnail()`, `Image::optimize()`, `Image::info()`. All methods accept file paths; `$output` defaults to overwriting the source. |
 
 ## 18. Observability
 
