@@ -35,7 +35,7 @@ $router->group('/api/v1', [VersionGate::class], function ($router): void {
     // A coarse global per-IP write cap backs every endpoint in this group
     // (one shared bucket via the 'api' scope); tighter per-route limits
     // (e.g. [new RateLimit(20, 60)]) stack on top for hot paths.
-    $router->group('', [Auth::class, new RateLimit(240, 60, 'api')], function ($router): void {
+    $router->group('', [Auth::class, new RateLimit((int) config('app.rate_limit.global', 240), 60, 'api')], function ($router): void {
         $router->post('/push/subscribe',   [PushController::class, 'subscribe']);
         $router->post('/push/unsubscribe', [PushController::class, 'unsubscribe']);
         $router->post('/push/test',        [PushController::class, 'test']);
