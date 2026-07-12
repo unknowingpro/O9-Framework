@@ -36,7 +36,9 @@ Web server document root: `public/`. Single entry point: `public/index.php`.
 The repository follows the canonical tree documented in `docs/` (dev docs are
 not tracked in git). Framework-owned paths are listed in
 `setup/framework-manifest.php`; applications built on O9 sync those paths via
-`setup/scripts/sync-framework.php` and own everything else.
+`setup/scripts/sync-framework.php` and own everything else. See
+`setup/MIGRATION.md` for the full procedure to bring an existing project onto
+O9 and to pull later framework updates into one that's already migrated.
 
 ## Sample surface
 
