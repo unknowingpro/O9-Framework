@@ -18,6 +18,7 @@ final class Database
     private PDO $pdo;
     private string $driver;
     private int $savepointSeq = 0;
+    private bool $inTxn = false;
 
     private function __construct()
     {
@@ -52,6 +53,10 @@ final class Database
         $conf = (array) config("database.connections.$name", []);
         $this->driver = $name;
         $this->pdo = $this->connect($conf);
+        // The old connection (and whatever it had open) is gone — a stale
+        // $inTxn=true here would make the next transaction() wrongly open a
+        // SAVEPOINT against a fresh connection with nothing to nest inside.
+        $this->inTxn = false;
     }
 
     /** @param array<string, mixed> $conf */
@@ -71,6 +76,13 @@ final class Database
                 $pdo = new PDO('sqlite:' . $path, null, null, $options);
                 $pdo->exec('PRAGMA foreign_keys = ON;');
                 $pdo->exec('PRAGMA journal_mode = WAL;');
+                // Without this, a second concurrent writer (e.g. two `queue:work`
+                // processes reserving a job at the same instant) gets an immediate
+                // "database is locked" PDOException instead of briefly waiting for
+                // the first writer's transaction to finish — WAL mode helps
+                // readers/writers coexist but does nothing for writer-vs-writer
+                // contention on its own.
+                $pdo->exec('PRAGMA busy_timeout = 5000;');
                 return $pdo;
             }
             $dsn = sprintf(
@@ -232,10 +244,21 @@ final class Database
      * inner failure rolls back only its own work and re-throws, instead of
      * silently relying on the outer rollback. The outermost call is a normal
      * BEGIN/COMMIT/ROLLBACK.
+     *
+     * The whole lifecycle runs on raw exec('BEGIN'/'COMMIT'/'ROLLBACK')
+     * rather than $pdo->beginTransaction()/commit()/rollBack(), and nesting
+     * is tracked with $inTxn instead of $pdo->inTransaction() — mixing the
+     * two APIs desyncs PDO's own tracking (confirmed: beginTransaction()
+     * followed by a raw exec('COMMIT') leaves inTransaction() stuck at
+     * true, so the next beginTransaction() throws "There is already an
+     * active transaction" even though nothing is actually open at the SQL
+     * level). Staying on one API end to end avoids that entirely. SQLite
+     * additionally needs BEGIN IMMEDIATE rather than plain BEGIN — see
+     * beginWrite().
      */
     public function transaction(callable $fn): mixed
     {
-        if ($this->pdo->inTransaction()) {
+        if ($this->inTxn) {
             $sp = 'sp_' . (++$this->savepointSeq);
             $this->pdo->exec("SAVEPOINT $sp");
             try {
@@ -252,18 +275,38 @@ final class Database
                 throw $e;
             }
         }
-        $this->pdo->beginTransaction();
+        $this->beginWrite();
+        $this->inTxn = true;
         try {
             $result = $fn($this);
-            $this->pdo->commit();
+            $this->pdo->exec('COMMIT');
+            $this->inTxn = false;
             return $result;
         } catch (\Throwable $e) {
+            $this->inTxn = false;
             try {
-                $this->pdo->rollBack();
+                $this->pdo->exec('ROLLBACK');
             } catch (\PDOException) {
                 // Already ended by an implicit commit (MySQL DDL) — nothing to undo.
             }
             throw $e;
         }
+    }
+
+    /**
+     * SQLite: BEGIN IMMEDIATE, not plain BEGIN. A plain (deferred) BEGIN
+     * doesn't acquire the write lock until the first write statement runs,
+     * so when several connections all defer-begin and then all attempt to
+     * write at nearly the same instant, the losers get an immediate
+     * "database is locked" — PRAGMA busy_timeout does NOT reliably retry
+     * that specific deferred-upgrade race. BEGIN IMMEDIATE acquires the
+     * write lock up front, so a losing connection blocks and retries under
+     * busy_timeout as expected instead of failing outright. MySQL has no
+     * such distinction (implicit START TRANSACTION locking is row-level,
+     * not database-level), so a plain BEGIN is fine there.
+     */
+    private function beginWrite(): void
+    {
+        $this->pdo->exec($this->driver === 'sqlite' ? 'BEGIN IMMEDIATE' : 'BEGIN');
     }
 }
