@@ -1,16 +1,19 @@
 # O9 Framework
 
-Zero-dependency PHP framework (PHP 8.2+) extracted from four production
+Zero-dependency PHP framework (PHP 8.2+) extracted from six production
 applications. Composer is optional: a bundled PSR-4 autoloader
 (`app/Core/Autoloader.php`) covers composer-less deployments.
+
+**[GUIDE.md](GUIDE.md) is the developer guide — start there.**
 
 O9 provides routing, an immutable request wrapper, enveloped JSON responses
 with streaming/range support, a PDO query builder, pluggable cache stores
 (array/file/Redis), a DB-backed job queue with worker runtime, driver-based
 file storage (local/S3/SFTP/WebDAV/FTP) with fallback chains, JWT/TOTP/crypto
 security primitives, a DB-driven 21-locale i18n system, mail transports,
-a console kernel with scheduling, and Prometheus/OpenAPI observability —
-all under the `App\` namespace in the canonical `app/` tree.
+a console kernel with scheduling, maintenance-mode and geo-blocking gates,
+and Prometheus/OpenAPI observability — all under the `App\` namespace in the
+canonical `app/` tree.
 
 A ready-to-use middleware set (`Auth`, `RateLimit`, `ThrottleAuth`,
 `VerifyCsrf`, `RequireCap`, `ApiKey`, `VersionGate`) and a sample surface —
@@ -61,9 +64,24 @@ Supporting `app/Models/{User,Media}Model.php` and
 model/service shape; `setup/database/migrations/007-009_*.sql` provide their
 schema.
 
+## Operational gates
+
+Maintenance mode is either the `maintenance_on` setting or a
+`storage/maintenance.flag` file (`touch` it; the first line is the message).
+Both exist on purpose: the setting lives in the database, so a database outage —
+exactly when you need to go down — leaves no way to turn it on. Admins, the auth
+routes and assets stay reachable either way.
+
+Geo-blocking (451) reads the CDN edge country header and **fails open** on an
+unknown country, so a missing header can never lock the site out. Enable it only
+behind a CDN that overwrites the header.
+
 ## Development
 
 ```bash
-composer test   # phpunit
+composer test   # phpunit — 806 tests
 composer stan   # phpstan level 8
 ```
+
+Both gates must be green before committing. Tests run against in-memory SQLite;
+no network, no fixture database.
