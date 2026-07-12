@@ -44,10 +44,26 @@ final class UserModel extends BaseModel
         ]);
     }
 
+    /**
+     * A fixed, precomputed bcrypt hash with no corresponding real password —
+     * used only so verifyPassword() always pays the same hashing cost for a
+     * nonexistent account as it does for a wrong password on a real one.
+     * Never rotate or derive this from anything account-specific.
+     */
+    private const DUMMY_HASH = '$2y$10$cQHiyMOxHBdYO2yijmGJuuIqs.4O2MT4sl5LikpVIyWn98NCZDPyS';
+
     public function verifyPassword(string $email, string $password): ?int
     {
         $user = $this->findByEmail($email);
-        if ($user === null || !Hash::check($password, (string) $user['password_hash'])) {
+        // Always run Hash::check(), even when no account matched: PHP's ||
+        // short-circuits, so skipping it for a nonexistent email would make
+        // that response return near-instantly next to a real "wrong
+        // password" response (which pays bcrypt's deliberate cost) — a
+        // timing side channel an attacker can use to enumerate which emails
+        // are registered without ever seeing a different error message.
+        $hash = $user !== null ? (string) $user['password_hash'] : self::DUMMY_HASH;
+        $verified = Hash::check($password, $hash);
+        if ($user === null || !$verified) {
             return null;
         }
         $id = (int) $user['id'];

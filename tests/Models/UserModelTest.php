@@ -47,6 +47,34 @@ final class UserModelTest extends TestCase
         $this->assertNull($this->model->verifyPassword('nobody@example.com', 'whatever'));
     }
 
+    /**
+     * Regression: verifyPassword() used to short-circuit on a nonexistent
+     * account before ever calling Hash::check(), so "no such email"
+     * returned near-instantly next to "wrong password" (which pays bcrypt's
+     * deliberate cost) — a timing side channel for email enumeration. It
+     * must now always pay the hashing cost, proven here by asserting the
+     * nonexistent-account path takes at least the same order of magnitude
+     * of time as a real bcrypt verify (a strict inequality between the two
+     * would be flaky; a floor on the "no such account" path is not).
+     */
+    public function testVerifyPasswordPaysTheSameHashingCostForANonexistentAccount(): void
+    {
+        $this->model->register('timing@example.com', 'Timing-Test-Pass1');
+        $realCheckStart = microtime(true);
+        $this->model->verifyPassword('timing@example.com', 'wrong-password-here');
+        $realCheckDuration = microtime(true) - $realCheckStart;
+
+        $noAccountStart = microtime(true);
+        $this->model->verifyPassword('no-such-account@example.com', 'whatever');
+        $noAccountDuration = microtime(true) - $noAccountStart;
+
+        // Both must actually run a bcrypt comparison, not just "not be
+        // literally instant" — a generous floor well under real bcrypt cost
+        // (typically tens of milliseconds) but well above a skipped check.
+        $this->assertGreaterThan(0.001, $realCheckDuration);
+        $this->assertGreaterThan(0.001, $noAccountDuration);
+    }
+
     public function testVerifyPasswordRehashesUpgradableHashOnLogin(): void
     {
         $id = $this->model->register('e@example.com', 'Legacy-Pass-42');
