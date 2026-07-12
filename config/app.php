@@ -31,4 +31,11 @@ return [
         'global' => (int) env('RATE_LIMIT_GLOBAL', 240),
         'auth'   => (int) env('RATE_LIMIT_AUTH', 5),
     ],
+
+    // Path prefix that routes to routes/bot.php instead of routes/web.php.
+    'bot_route_prefix' => env('BOT_ROUTE_PREFIX', '/webhook'),
+
+    // Shared secret for Controllers\Admin\CronController's HTTP-triggered
+    // schedule:run fallback. Empty (default) refuses every request.
+    'cron_secret' => env('CRON_SECRET', ''),
 ];

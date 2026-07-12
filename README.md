@@ -12,6 +12,14 @@ security primitives, a DB-driven 21-locale i18n system, mail transports,
 a console kernel with scheduling, and Prometheus/OpenAPI observability —
 all under the `App\` namespace in the canonical `app/` tree.
 
+A ready-to-use middleware set (`Auth`, `RateLimit`, `ThrottleAuth`,
+`VerifyCsrf`, `RequireCap`, `ApiKey`, `VersionGate`) and a sample surface —
+versioned `/api/v1` JSON endpoints, a web front end, a Telegram bot webhook
+and Mini App auth flow, and an admin console — show how the pieces fit
+together across the `Admin/ Api/ Bot/ Web/` controller groups. JS and PHP
+SDK clients (`sdk/o9-sdk.js`, `sdk/O9SDK.php`) speak the framework's
+`{ok, data, error, meta}` response envelope out of the box.
+
 ## Quick start
 
 ```bash
@@ -29,6 +37,27 @@ The repository follows the canonical tree documented in `docs/` (dev docs are
 not tracked in git). Framework-owned paths are listed in
 `setup/framework-manifest.php`; applications built on O9 sync those paths via
 `setup/scripts/sync-framework.php` and own everything else.
+
+## Sample surface
+
+`routes/api.php`, `routes/web.php`, and `routes/bot.php` wire up a working
+example of every controller group:
+
+- `Api\HealthController`, `PushController`, `SyncController` — versioned
+  `/api/v1` JSON endpoints behind `VersionGate`, `Auth`, and `RateLimit`.
+- `Web\PageController` — server-rendered pages using `View`/`Seo`/`Lang`.
+- `Bot\WebhookController`, `WebAppController`, `AdminBotController` —
+  Telegram webhook verification, Mini App `initData` auth, and an
+  admin-only command dispatcher.
+- `Admin\AdminApiController`, `AdminWebController`, `MediaController`,
+  `MonitorController`, `CronController` — an authenticated admin console,
+  driver-backed media serving, Prometheus metrics, and a secret-gated
+  cron-run endpoint.
+
+Supporting `app/Models/{User,Media}Model.php` and
+`app/Services/{Settings,Notification,Cron}Service.php` show the intended
+model/service shape; `setup/database/migrations/007-009_*.sql` provide their
+schema.
 
 ## Development
 

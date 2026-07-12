@@ -2,17 +2,25 @@
 declare(strict_types=1);
 
 /**
- * Web (server-rendered) routes. $router is in scope when required by the
- * kernel; returning a closure that receives it is also supported.
+ * Web (server-rendered) routes.
  *
  * @var \App\Core\Router $router
  */
 
-use App\Core\Response;
+use App\Controllers\Admin\AdminWebController;
+use App\Controllers\Admin\MediaController;
+use App\Controllers\Web\PageController;
+use App\Middleware\VerifyCsrf;
 
-// Placeholder until the sample PageController lands with the app layer.
-$router->get('/', function (): never {
-    Response::html('<!doctype html><meta charset="utf-8"><title>O9</title>'
-        . '<div style="font-family:system-ui,sans-serif;padding:48px;text-align:center">'
-        . '<h1>O9 Framework</h1><p>It runs. Routes live in <code>routes/</code>.</p></div>');
+// ── Public pages ─────────────────────────────────────────────────────────
+$router->get('/', [PageController::class, 'home'], [VerifyCsrf::class]);
+$router->get('/about', [PageController::class, 'about'], [VerifyCsrf::class]);
+
+// ── Admin panel ──────────────────────────────────────────────────────────
+$router->group('/admin', ['Auth:admin', VerifyCsrf::class], function ($router): void {
+    $router->get('/', [AdminWebController::class, 'dashboard']);
+    // {path} matches one segment (Router params don't span '/') — nested
+    // storage paths need either a flat naming scheme or a custom route per
+    // depth; this sample keeps it to one segment.
+    $router->get('/media/{path}', [MediaController::class, 'show']);
 });
