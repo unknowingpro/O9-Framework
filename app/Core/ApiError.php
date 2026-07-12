@@ -22,6 +22,8 @@ final class ApiError
     public const SERVER_ERROR     = 'server_error';       // 500
     public const CSRF_MISMATCH    = 'csrf_mismatch';      // 419
     public const FORCE_UPDATE     = 'force_update';       // 426
+    public const GEO_BLOCKED      = 'geo_blocked';        // 451
+    public const MAINTENANCE      = 'maintenance';        // 503
 
     /** @return list<string> the canonical codes. */
     public static function codes(): array
@@ -29,7 +31,7 @@ final class ApiError
         return [
             self::BAD_REQUEST, self::VALIDATION, self::UNAUTHORIZED, self::FORBIDDEN,
             self::NOT_FOUND, self::CONFLICT, self::RATE_LIMITED, self::PAYMENT_REQUIRED, self::SERVER_ERROR,
-            self::CSRF_MISMATCH, self::FORCE_UPDATE,
+            self::CSRF_MISMATCH, self::FORCE_UPDATE, self::GEO_BLOCKED, self::MAINTENANCE,
         ];
     }
 
@@ -47,6 +49,8 @@ final class ApiError
             self::SERVER_ERROR     => 500,
             self::CSRF_MISMATCH    => 419,
             self::FORCE_UPDATE     => 426,
+            self::GEO_BLOCKED      => 451,
+            self::MAINTENANCE      => 503,
             default                => 400,
         };
     }
@@ -66,6 +70,8 @@ final class ApiError
             self::SERVER_ERROR     => 'An unexpected error occurred.',
             self::CSRF_MISMATCH    => 'CSRF token mismatch.',
             self::FORCE_UPDATE     => 'A newer app version is required.',
+            self::GEO_BLOCKED      => 'This service is not available in your region.',
+            self::MAINTENANCE      => 'Service temporarily unavailable.',
             default                => 'Request failed.',
         };
     }

@@ -66,16 +66,14 @@ class App
 
             // Maintenance mode: 503 to everyone except admins (who keep full access
             // so they can fix things) and the auth routes (so they can log in).
-            if (class_exists(Maintenance::class) && Maintenance::shouldBlock($this->request)) {
-                Maintenance::serve($this->request);
-                return;
+            if (Maintenance::shouldBlock($this->request)) {
+                Maintenance::serve($this->request);   // throws HttpResponse
             }
 
             // Geo-blocking: refuse visitors from blocked countries (451).
             // CDN-edge-header based; fails open when no country is known.
-            if (class_exists(GeoBlock::class) && GeoBlock::shouldBlock($this->request)) {
-                GeoBlock::serve($this->request);
-                return;
+            if (GeoBlock::shouldBlock($this->request)) {
+                GeoBlock::serve($this->request);      // throws HttpResponse
             }
 
             // API correlation id + per-request access logging (captured at shutdown so

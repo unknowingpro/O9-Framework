@@ -153,6 +153,7 @@ function o9_setup_scaffold_storage_dirs(string $root): array
         'storage/database',
         'storage/tmp',
         'storage/jobs',
+        'storage/locks',
         'storage/uploads',
         'storage/data/state',
     ];
