@@ -66,6 +66,25 @@ final class SeoTest extends TestCase
         $this->assertSame('A', $decoded['@graph'][0]['name']);
     }
 
+    /**
+     * Regression: jsonLdJson() is echoed raw inside a <script
+     * type="application/ld+json"> tag (layouts/main.php). It's built with
+     * JSON_UNESCAPED_SLASHES for readable URLs, which means a value
+     * containing a literal "</script>" — e.g. a title pulled from dynamic
+     * content once a real page calls jsonLd() with it — would otherwise
+     * close that script tag early and let anything after it run as raw
+     * HTML. Must never appear verbatim in the output, and must still
+     * decode back to the exact original string.
+     */
+    public function testJsonLdNeverEmitsALiteralClosingScriptTag(): void
+    {
+        Seo::jsonLd(['@type' => 'Article', 'headline' => '</script><script>alert(1)</script>']);
+        $json = (string) Seo::jsonLdJson();
+        $this->assertStringNotContainsString('</script>', $json);
+        $decoded = json_decode($json, true);
+        $this->assertSame('</script><script>alert(1)</script>', $decoded['headline']);
+    }
+
     public function testJsonLdIgnoresEmptyArrays(): void
     {
         Seo::jsonLd([]);
