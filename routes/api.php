@@ -14,11 +14,13 @@ declare(strict_types=1);
 use App\Controllers\Admin\AdminApiController;
 use App\Controllers\Admin\CronController;
 use App\Controllers\Admin\MonitorController;
+use App\Controllers\Api\AuthController;
 use App\Controllers\Api\HealthController;
 use App\Controllers\Api\PushController;
 use App\Controllers\Api\SyncController;
 use App\Middleware\Auth;
 use App\Middleware\RateLimit;
+use App\Middleware\ThrottleAuth;
 use App\Middleware\VersionGate;
 
 $router->group('/api/v1', [VersionGate::class], function ($router): void {
@@ -26,6 +28,16 @@ $router->group('/api/v1', [VersionGate::class], function ($router): void {
     // ── Public ───────────────────────────────────────────────────────────
     $router->get('/health', [HealthController::class, 'index']);
     $router->get('/health/ready', [HealthController::class, 'ready']);
+
+    // Credential-sensitive: throttled tighter than the general public group
+    // (5/5min per IP+path) so brute-forcing/credential-stuffing is rate
+    // limited before it ever reaches UserModel.
+    $router->group('/auth', [ThrottleAuth::class], function ($router): void {
+        $router->post('/register', [AuthController::class, 'register']);
+        $router->post('/login',    [AuthController::class, 'login']);
+        $router->post('/refresh',  [AuthController::class, 'refresh']);
+        $router->post('/logout',   [AuthController::class, 'logout']);
+    });
 
     // HTTP-triggered cron fallback — its own shared-secret check, not
     // session/JWT auth, so it lives outside the Auth group.

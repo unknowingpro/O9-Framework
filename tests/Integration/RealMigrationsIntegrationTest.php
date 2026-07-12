@@ -86,6 +86,8 @@ final class RealMigrationsIntegrationTest extends TestCase
         SubscriptionService::reset();
         Jwt::reset();
         RefreshTokenService::reset();
+        unset($_SERVER['HTTP_AUTHORIZATION']);
+        $_POST = [];
     }
 
     private function rrmdir(string $dir): void
@@ -198,6 +200,45 @@ final class RealMigrationsIntegrationTest extends TestCase
         $rotated = RefreshTokenService::rotate($token);
         $this->assertNotNull($rotated);
         $this->assertNull(RefreshTokenService::rotate($token), 'reusing the old token must fail');
+    }
+
+    public function testAuthControllerRegisterLoginRefreshLogoutAgainstTheRealTables(): void
+    {
+        $controller = new \App\Controllers\Api\AuthController();
+
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_SERVER['REQUEST_URI']    = '/api/v1/auth/register';
+        $_POST = ['email' => 'real-migrations@example.com', 'password' => 'Correct-Horse-99'];
+        try {
+            $controller->register(new \App\Core\Request());
+            $this->fail('expected HttpResponse to be thrown');
+        } catch (\App\Core\HttpResponse $r) {
+            $this->assertSame(201, $r->status);
+            $tokens = json_decode((string) $r->payload, true)['data'];
+        }
+
+        $_SERVER['REQUEST_URI'] = '/api/v1/auth/refresh';
+        $_POST = ['refresh_token' => $tokens['refresh_token']];
+        try {
+            $controller->refresh(new \App\Core\Request());
+            $this->fail('expected HttpResponse to be thrown');
+        } catch (\App\Core\HttpResponse $r) {
+            $this->assertSame(200, $r->status);
+            $rotated = json_decode((string) $r->payload, true)['data'];
+        }
+
+        $_SERVER['REQUEST_URI']        = '/api/v1/auth/logout';
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . $rotated['access_token'];
+        $_POST = ['refresh_token' => $rotated['refresh_token']];
+        try {
+            $controller->logout(new \App\Core\Request());
+            $this->fail('expected HttpResponse to be thrown');
+        } catch (\App\Core\HttpResponse $r) {
+            $this->assertSame(200, $r->status);
+        }
+
+        $this->assertNull(Jwt::decode($rotated['access_token']), 'access token must be revoked after logout');
+        $this->assertNull(RefreshTokenService::rotate($rotated['refresh_token']), 'refresh token must be revoked after logout');
     }
 
     public function testQueuePushAndReserveWorkAgainstTheRealJobsTable(): void

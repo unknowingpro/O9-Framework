@@ -68,6 +68,23 @@ final class RefreshTokenServiceTest extends TestCase
         $this->assertNull(RefreshTokenService::rotate($token));
     }
 
+    public function testRevokeTokenRevokesOnlyThatTokensFamilyNotOtherFamilies(): void
+    {
+        $sessionA = RefreshTokenService::issue(7);
+        $sessionB = RefreshTokenService::issue(7); // a second, independent login/device
+
+        RefreshTokenService::revokeToken($sessionA);
+
+        $this->assertNull(RefreshTokenService::rotate($sessionA));
+        $this->assertNotNull(RefreshTokenService::rotate($sessionB)); // untouched
+    }
+
+    public function testRevokeTokenIsANoOpForAnUnknownToken(): void
+    {
+        RefreshTokenService::revokeToken('not-a-real-token');
+        $this->addToAssertionCount(1); // no exception
+    }
+
     public function testGracefullyNoOpsWithoutTheTable(): void
     {
         $this->db->pdo()->exec('DROP TABLE refresh_tokens');

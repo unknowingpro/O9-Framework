@@ -73,6 +73,26 @@ final class RefreshTokenService
         );
     }
 
+    /**
+     * Revoke just the family a single presented token belongs to — a normal
+     * single-session logout, as opposed to revokeAllForUser()'s "log out
+     * everywhere". Silently no-ops for an unknown/already-revoked token
+     * (logout must never fail just because the token was already stale).
+     */
+    public static function revokeToken(string $plainToken): void
+    {
+        if (!self::available()) {
+            return;
+        }
+        $row = Database::getInstance()->raw(
+            'SELECT family_id FROM refresh_tokens WHERE token_hash = ?',
+            [self::hash($plainToken)]
+        )->fetch();
+        if (is_array($row)) {
+            self::revokeFamily((string) $row['family_id']);
+        }
+    }
+
     /** Revoke every refresh token for a user, across every family — "log out everywhere". */
     public static function revokeAllForUser(int $userId): void
     {
