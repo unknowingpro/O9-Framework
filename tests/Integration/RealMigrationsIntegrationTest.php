@@ -71,10 +71,7 @@ final class RealMigrationsIntegrationTest extends TestCase
     protected function tearDown(): void
     {
         StorageManager::reset();
-        foreach (glob($this->storageRoot . '/*') ?: [] as $f) {
-            @unlink($f);
-        }
-        @rmdir($this->storageRoot);
+        $this->rrmdir($this->storageRoot); // MediaModel stores uploads under a {userId}/ subdirectory
 
         $pdo = Database::getInstance()->pdo();
         foreach (self::TABLES as $table) {
@@ -86,6 +83,21 @@ final class RealMigrationsIntegrationTest extends TestCase
         PaymentGatewayFactory::reset();
         SubscriptionService::reset();
         Jwt::reset();
+    }
+
+    private function rrmdir(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $entry;
+            is_dir($path) ? $this->rrmdir($path) : unlink($path);
+        }
+        rmdir($dir);
     }
 
     public function testEveryMigrationAppliesCleanlyInOrder(): void
