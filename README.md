@@ -11,9 +11,10 @@ with streaming/range support, a PDO query builder, pluggable cache stores
 (array/file/Redis), a DB-backed job queue with worker runtime, driver-based
 file storage (local/S3/SFTP/WebDAV/FTP) with fallback chains, JWT/TOTP/crypto
 security primitives, a DB-driven 21-locale i18n system, mail transports,
-a console kernel with scheduling, maintenance-mode and geo-blocking gates,
-and Prometheus/OpenAPI observability — all under the `App\` namespace in the
-canonical `app/` tree.
+a console kernel with scheduling and database seeding, GD image manipulation,
+upload validation with MIME sniffing, cache-aware models, maintenance-mode and
+geo-blocking gates, and Prometheus/OpenAPI observability — all under the
+`App\` namespace in the canonical `app/` tree.
 
 A ready-to-use middleware set (`Auth`, `RateLimit`, `ThrottleAuth`,
 `VerifyCsrf`, `RequireCap`, `ApiKey`, `VersionGate`) and a sample surface —
