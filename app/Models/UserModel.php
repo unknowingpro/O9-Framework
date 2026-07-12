@@ -40,7 +40,16 @@ final class UserModel extends BaseModel
         if ($user === null || !Hash::check($password, (string) $user['password_hash'])) {
             return null;
         }
-        return (int) $user['id'];
+        $id = (int) $user['id'];
+        // Transparent upgrade: a successful login with a hash that is below
+        // the current work factor (or a legacy non-bcrypt hash migrated here)
+        // re-hashes the password with the current algorithm and persists it,
+        // so existing accounts move to bcrypt without a forced reset. No-op
+        // once every row is on the current work factor.
+        if (Hash::needsRehash((string) $user['password_hash'])) {
+            $this->updateById($id, ['password_hash' => Hash::make($password)]);
+        }
+        return $id;
     }
 
     public function setLocale(int $id, string $locale): void

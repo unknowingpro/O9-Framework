@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Tests\Models;
 
 use App\Core\Database;
+use App\Core\Security\Hash;
 use App\Models\UserModel;
 use PHPUnit\Framework\TestCase;
 
@@ -44,6 +45,28 @@ final class UserModelTest extends TestCase
         $this->assertSame($id, $this->model->verifyPassword('b@example.com', 'correct-horse'));
         $this->assertNull($this->model->verifyPassword('b@example.com', 'wrong-pass'));
         $this->assertNull($this->model->verifyPassword('nobody@example.com', 'whatever'));
+    }
+
+    public function testVerifyPasswordRehashesUpgradableHashOnLogin(): void
+    {
+        $id = $this->model->register('e@example.com', 'legacy-pass');
+        // Simulate a stored hash below the current work factor (cost 4).
+        $legacy = password_hash('legacy-pass', PASSWORD_BCRYPT, ['cost' => 4]);
+        $this->assertNotNull($legacy);
+        $stmt = Database::getInstance()->pdo()->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
+        $stmt->execute([$legacy, $id]);
+        $this->assertTrue(Hash::needsRehash((string) $this->model->findByEmail('e@example.com')['password_hash']));
+
+        // A correct login still resolves the user ...
+        $this->assertSame($id, $this->model->verifyPassword('e@example.com', 'legacy-pass'));
+
+        $row = $this->model->findByEmail('e@example.com');
+        // ... the hash is upgraded to a fresh bcrypt hash ...
+        $this->assertNotSame($legacy, (string) $row['password_hash']);
+        // ... that still verifies against the original password ...
+        $this->assertTrue(Hash::check('legacy-pass', (string) $row['password_hash']));
+        // ... and no longer needs a rehash (current work factor).
+        $this->assertFalse(Hash::needsRehash((string) $row['password_hash']));
     }
 
     public function testSetLocaleUpdatesTheRow(): void
