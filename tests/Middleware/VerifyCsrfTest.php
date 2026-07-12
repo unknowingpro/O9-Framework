@@ -80,4 +80,55 @@ final class VerifyCsrfTest extends TestCase
             $this->assertSame(302, $r->status);
         }
     }
+
+    public function testMatchingOriginWithAValidTokenPasses(): void
+    {
+        $_SERVER['HTTP_HOST'] = 'example.com';
+        $_SERVER['HTTP_ORIGIN'] = 'https://example.com';
+        $_SESSION['_csrf'] = 'token-value';
+        $_POST['_csrf'] = 'token-value';
+        (new VerifyCsrf())->handle($this->req('POST', '/web/form'));
+        $this->addToAssertionCount(1);
+    }
+
+    public function testCrossOriginRequestIsRejectedBeforeTheTokenIsEvenChecked(): void
+    {
+        $_SERVER['HTTP_HOST'] = 'example.com';
+        $_SERVER['HTTP_ORIGIN'] = 'https://attacker.test';
+        // A VALID token is presented — proves the Origin check runs (and
+        // rejects) independently of, and before, the token check.
+        $_SESSION['_csrf'] = 'token-value';
+        $_POST['_csrf'] = 'token-value';
+        $_SERVER['HTTP_ACCEPT'] = 'application/json';
+        $this->expectException(HttpException::class);
+        try {
+            (new VerifyCsrf())->handle($this->req('POST', '/web/form'));
+        } catch (HttpException $e) {
+            $this->assertSame(419, $e->status);
+            throw $e;
+        }
+    }
+
+    public function testFallsBackToRefererWhenOriginIsAbsent(): void
+    {
+        $_SERVER['HTTP_HOST'] = 'example.com';
+        $_SERVER['HTTP_REFERER'] = 'https://example.com/some/page';
+        $_SESSION['_csrf'] = 'token-value';
+        $_POST['_csrf'] = 'token-value';
+        (new VerifyCsrf())->handle($this->req('POST', '/web/form'));
+        $this->addToAssertionCount(1);
+    }
+
+    public function testMismatchedPortIsIgnoredWhenComparingHosts(): void
+    {
+        // HTTP_HOST commonly carries a port (e.g. behind a non-standard-port
+        // dev server); the comparison must strip it from both sides or every
+        // same-site request on a non-default port would be wrongly rejected.
+        $_SERVER['HTTP_HOST'] = 'example.com:8080';
+        $_SERVER['HTTP_ORIGIN'] = 'https://example.com';
+        $_SESSION['_csrf'] = 'token-value';
+        $_POST['_csrf'] = 'token-value';
+        (new VerifyCsrf())->handle($this->req('POST', '/web/form'));
+        $this->addToAssertionCount(1);
+    }
 }
