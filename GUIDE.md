@@ -21,8 +21,10 @@ what the framework is; this document is how you use it.
 - [16. Operational gates](#16-operational-gates)
 - [17. Utilities](#17-utilities)
 - [18. Observability](#18-observability)
-- [19. Testing](#19-testing)
-- [20. Staying in sync with the framework](#20-staying-in-sync-with-the-framework)
+- [19. Ai](#19-ai)
+- [20. Notifications](#20-notifications)
+- [21. Testing](#21-testing)
+- [22. Staying in sync with the framework](#22-staying-in-sync-with-the-framework)
 
 ---
 
@@ -442,7 +444,130 @@ line it produces — that is how you reconstruct one request out of a busy log.
 `MonitorController` surfaces the same numbers. `OpenApiGenerator` introspects the
 router into an OpenAPI 3 document, so the API docs cannot drift from the routes.
 
-## 19. Testing
+## 19. Ai
+
+```php
+$ai = AiProviderFactory::make();                          // reads config('ai.provider')
+$response = $ai->chat('gpt-4o', [
+    ['role' => 'user', 'content' => 'Explain OOP in one sentence.'],
+]);
+echo $response->content;                                  // string
+echo $response->inputTokens;                              // ?int
+```
+
+The `AiProvider` port has two methods. `chat()` returns an `AiResponse` value
+object with `content`, `model`, token counts, and `finishReason`. `stream()`
+returns a `Generator` yielding `AiStreamChunk` objects as each delta arrives:
+
+```php
+foreach ($ai->stream('gpt-4o', $messages) as $chunk) {
+    echo $chunk->delta;
+    if ($chunk->finishReason !== null) {
+        // stream finished — $chunk->outputTokens may be set
+    }
+}
+```
+
+**Drivers.** Only `OpenAiProvider` ships in core. It speaks the OpenAI-compatible
+REST API (`/v1/chat/completions`) and works with OpenAI, Anthropic (in proxy
+mode), Ollama, vLLM, Groq, Together, and every other provider using the same wire
+format. Configure the base URL per provider in `config/ai.php`:
+
+```php
+'providers' => [
+    'openai' => [
+        'api_key'  => env('OPENAI_API_KEY', ''),
+        'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+    ],
+],
+```
+
+Register a custom provider (e.g. a native Anthropic client) via the factory:
+
+```php
+AiProviderFactory::extend('anthropic', fn () => new AnthropicProvider(
+    config('ai.providers.anthropic'),
+));
+```
+
+`AiProviderFactory::make('anthropic')` then returns your provider.
+
+Both `chat()` and `stream()` accept the standard OpenAI options in `$options`:
+`temperature`, `max_tokens`, `top_p`, `stop`, `frequency_penalty`,
+`presence_penalty`, `seed`, `response_format`. `stream()` automatically
+requests usage info (`stream_options.include_usage`) on the final chunk.
+
+## 20. Notifications
+
+The framework ships `NotificationService` (fan-out dispatcher) and the
+`NotificationChannel` interface in `app/Services/`, and two concrete channels
+in `app/Notifications/`.
+
+**Register channels** in `app/bootstrap.php`:
+
+```php
+NotificationService::registerChannel('telegram', new TelegramChannel());
+NotificationService::registerChannel('webhook', new WebhookChannel(
+    defaultUrl: 'https://hooks.example.com/notify',
+));
+```
+
+**Dispatch** — one call reaches every registered channel:
+
+```php
+$notifier = new NotificationService();
+$notifier->notify(
+    userId: 42,
+    fromUserId: null,
+    type: 'subscription_expiring',
+    title: 'Your plan expires soon',
+    body: 'Renew before the 15th to keep access.',
+    meta: ['chat_id' => -1001234567890],     // passed through to every channel
+);
+```
+
+A channel that throws is isolated and logged — one broken integration never
+blocks the others.
+
+### TelegramChannel
+
+Sends messages via the Bot API `sendMessage` endpoint. Token resolution: constructor
+argument → `config('bot.token')`. Chat ID resolution: `$meta['chat_id']` → `$userId`.
+Markdown parse mode by default.
+
+```php
+NotificationService::registerChannel('telegram', new TelegramChannel());
+```
+
+### WebhookChannel
+
+POSTs a JSON payload (`{user_id, type, title, body, meta}`) to a configurable
+URL. URL resolution: `$meta['webhook_url']` → constructor `$defaultUrl` →
+`config('notifications.webhook.default_url')`.
+
+```php
+NotificationService::registerChannel('webhook', new WebhookChannel(
+    defaultUrl: 'https://hooks.example.com/notify',
+));
+```
+
+---
+
+### Writing a custom channel
+
+Implement `NotificationChannel` anywhere in your app:
+
+```php
+final class DiscordChannel implements NotificationChannel
+{
+    public function send(int $userId, string $type, string $title, string $body, array $meta = []): bool
+    {
+        // POST to Discord webhook, queue for delivery, etc.
+    }
+}
+```
+
+## 21. Testing
 
 ```bash
 composer test    # phpunit
@@ -464,7 +589,7 @@ try {
 
 Both gates must stay green before you commit.
 
-## 20. Staying in sync with the framework
+## 22. Staying in sync with the framework
 
 Fix a framework bug **once, in phpframe**, then push it to every project:
 

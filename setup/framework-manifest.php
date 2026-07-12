@@ -36,6 +36,8 @@ return [
         'app/Payments',
         'app/Subscriptions',
         'app/Support',
+        'app/Ai',
+        'app/Notifications',
         'app/Services/I18n',
     ],
     'files' => [
