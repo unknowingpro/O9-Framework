@@ -5,6 +5,7 @@ namespace Tests\Integration;
 
 use App\Core\Database;
 use App\Core\Security\Jwt;
+use App\Core\Security\RefreshTokenService;
 use App\Core\StorageManager;
 use App\Entitlements\EntitlementService;
 use App\I18n\Translatable;
@@ -42,7 +43,7 @@ final class RealMigrationsIntegrationTest extends TestCase
         'languages', 'roles', 'permissions', 'role_permissions', 'user_roles',
         'user_subscriptions', 'entitlement_overrides', 'payment_intents',
         'store_webhook_events', 'content_translations', 'users', 'media',
-        'settings', 'jobs', 'jwt_revocations', 'migrations',
+        'settings', 'jobs', 'jwt_revocations', 'refresh_tokens', 'migrations',
     ];
 
     private string $storageRoot;
@@ -66,6 +67,7 @@ final class RealMigrationsIntegrationTest extends TestCase
         PaymentGatewayFactory::reset();
         SubscriptionService::reset();
         Jwt::reset();
+        RefreshTokenService::reset();
     }
 
     protected function tearDown(): void
@@ -83,6 +85,7 @@ final class RealMigrationsIntegrationTest extends TestCase
         PaymentGatewayFactory::reset();
         SubscriptionService::reset();
         Jwt::reset();
+        RefreshTokenService::reset();
     }
 
     private function rrmdir(string $dir): void
@@ -186,6 +189,15 @@ final class RealMigrationsIntegrationTest extends TestCase
         $this->assertNotNull(Jwt::decode($token));
         Jwt::revoke($token);
         $this->assertNull(Jwt::decode($token));
+    }
+
+    public function testRefreshTokenRotationWorksAgainstTheRealRefreshTokensTable(): void
+    {
+        $token = RefreshTokenService::issue(1);
+        $this->assertNotNull($token);
+        $rotated = RefreshTokenService::rotate($token);
+        $this->assertNotNull($rotated);
+        $this->assertNull(RefreshTokenService::rotate($token), 'reusing the old token must fail');
     }
 
     public function testQueuePushAndReserveWorkAgainstTheRealJobsTable(): void
