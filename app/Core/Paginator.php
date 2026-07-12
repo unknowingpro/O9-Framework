@@ -9,6 +9,9 @@ namespace App\Core;
  */
 final class Paginator
 {
+    /** Hard ceiling on page size — a client-supplied per_page must never be able to force an unbounded row scan. */
+    public const MAX_PER_PAGE = 100;
+
     public int $page;
     public int $perPage;
     public int $total;
@@ -17,7 +20,7 @@ final class Paginator
 
     public function __construct(int $page, int $perPage, int $total)
     {
-        $this->perPage = max(1, $perPage);
+        $this->perPage = min(max(1, $perPage), self::MAX_PER_PAGE);
         $this->total   = max(0, $total);
         $this->pages   = (int) max(1, ceil($this->total / $this->perPage));
         $this->page    = min(max(1, $page), $this->pages);
@@ -45,7 +48,7 @@ final class Paginator
     public static function envelope(int $count, int $page, int $perPage, ?int $total = null): array
     {
         $page = max(1, $page);
-        $perPage = max(1, $perPage);
+        $perPage = min(max(1, $perPage), self::MAX_PER_PAGE);
         $meta = [
             'page'     => $page,
             'per_page' => $perPage,
