@@ -54,8 +54,11 @@ final class MediaModelTest extends TestCase
 
     public function testStoreUploadWritesFileAndCatalogRow(): void
     {
+        // Real JPEG bytes, not just a .JPG-named text file — mime is now
+        // sniffed from content (see MediaFilenameHelper::detectMime()), so
+        // the fixture must actually be the thing it claims to be.
         $tmp = tempnam(sys_get_temp_dir(), 'src_');
-        file_put_contents($tmp, 'file bytes');
+        imagejpeg(imagecreatetruecolor(2, 2), $tmp);
 
         $id = $this->model->storeUpload($tmp, 'My Photo.JPG', 7);
         @unlink($tmp);
@@ -66,6 +69,19 @@ final class MediaModelTest extends TestCase
         $this->assertSame('My Photo.JPG', $row['filename']);
         $this->assertStringStartsWith('7/', $row['path']);
         $this->assertTrue(StorageManager::instance()->exists($row['path']));
+    }
+
+    public function testStoreUploadRecordsTheSniffedMimeNotTheClaimedExtension(): void
+    {
+        // A PNG's bytes, uploaded under a .jpg filename — the catalogued mime
+        // must reflect what the file actually is, not what its name claims.
+        $tmp = tempnam(sys_get_temp_dir(), 'src_');
+        imagepng(imagecreatetruecolor(2, 2), $tmp);
+
+        $id = $this->model->storeUpload($tmp, 'disguised.jpg', 7);
+        @unlink($tmp);
+
+        $this->assertSame('image/png', $this->model->find($id)['mime']);
     }
 
     public function testForUserOrdersByIdDescending(): void

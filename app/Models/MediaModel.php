@@ -31,7 +31,10 @@ final class MediaModel extends BaseModel
             'path'     => $path,
             'driver'   => $storage->primaryName(),
             'filename' => MediaFilenameHelper::sanitize($originalName),
-            'mime'     => MediaFilenameHelper::guessMime($originalName),
+            // Sniffed from the actual bytes, not the client-supplied filename —
+            // a renamed upload (e.g. "photo.jpg" that's really an HTML/script
+            // payload) must not be catalogued under a trusted-looking MIME type.
+            'mime'     => MediaFilenameHelper::detectMime($tmpPath, $originalName),
             'size'     => @filesize($tmpPath) ?: null,
         ]);
     }

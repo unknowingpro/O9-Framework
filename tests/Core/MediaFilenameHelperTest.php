@@ -86,4 +86,39 @@ final class MediaFilenameHelperTest extends TestCase
         $b = MediaFilenameHelper::safeStoredName('same.txt');
         $this->assertNotSame($a, $b);
     }
+
+    public function testDetectMimeSniffsTheRealContentTypeRegardlessOfTheClaimedExtension(): void
+    {
+        // A file whose bytes are a PNG, renamed to look like a JPEG — the
+        // extension-based guess would trust the lie; content sniffing must not.
+        $path = tempnam(sys_get_temp_dir(), 'mft');
+        file_put_contents($path, base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+        ));
+        try {
+            $this->assertSame('image/png', MediaFilenameHelper::detectMime($path, 'photo.jpg'));
+        } finally {
+            unlink($path);
+        }
+    }
+
+    public function testDetectMimeFallsBackToTheExtensionGuessWhenTheFileIsMissing(): void
+    {
+        $this->assertSame('image/jpeg', MediaFilenameHelper::detectMime('/nonexistent/path', 'photo.jpg'));
+    }
+
+    public function testDetectMimeFallsBackToTheExtensionGuessWhenTheSniffIsInconclusive(): void
+    {
+        // Random bytes with no recognizable magic number sniff as
+        // application/octet-stream — too generic to be useful, so fall back
+        // to the extension-based guess rather than catalouging everything
+        // ambiguous as octet-stream.
+        $path = tempnam(sys_get_temp_dir(), 'mft');
+        file_put_contents($path, random_bytes(64));
+        try {
+            $this->assertSame('application/pdf', MediaFilenameHelper::detectMime($path, 'report.pdf'));
+        } finally {
+            unlink($path);
+        }
+    }
 }

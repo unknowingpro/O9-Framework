@@ -67,6 +67,28 @@ final class MediaFilenameHelper
     }
 
     /**
+     * Sniff the real content type from the file's bytes (magic numbers) via
+     * the bundled fileinfo extension, rather than trusting the client-supplied
+     * filename's extension. Falls back to the extension-based guess when
+     * fileinfo is unavailable or the sniff is inconclusive, so callers always
+     * get a usable value.
+     */
+    public static function detectMime(string $absPath, string $originalName): string
+    {
+        if (function_exists('finfo_open') && is_file($absPath)) {
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo !== false) {
+                $detected = finfo_file($finfo, $absPath);
+                finfo_close($finfo);
+                if (is_string($detected) && $detected !== '' && $detected !== 'application/octet-stream') {
+                    return $detected;
+                }
+            }
+        }
+        return self::guessMime($originalName);
+    }
+
+    /**
      * A safe, collision-resistant name for storing an uploaded file: a random
      * hex stem preserving the original (sanitized) extension. The original
      * name is never trusted as a storage path component.
