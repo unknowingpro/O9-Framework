@@ -107,4 +107,27 @@ final class MigrationsServiceTest extends TestCase
         }
         $this->assertContains('001_languages.sqlite.sql', $available);
     }
+
+    public function testRealJobsMigrationProducesATableQueueCanActuallyUse(): void
+    {
+        // Regression: Core\Queue's raw SQL against the `jobs` table had no
+        // accompanying migration at all — every fresh install crashed
+        // `console queue:work` with an uncaught "no such table: jobs".
+        // QueueTest hand-rolls its own schema and would never have caught
+        // this; only applying the REAL migration file proves it works.
+        $real = base_path('setup/database/migrations/010_jobs.sqlite.sql');
+        $this->assertFileExists($real);
+        copy($real, $this->dir . '/010_jobs.sqlite.sql');
+
+        Database::getInstance()->pdo()->exec('DROP TABLE IF EXISTS jobs');
+        (new MigrationsService($this->dir))->applyAll();
+
+        $id = \App\Core\Queue::push(\App\Jobs\DispatchEventJob::class, ['event' => 'x', 'payload' => []]);
+        $this->assertSame(1, \App\Core\Queue::size());
+        $job = \App\Core\Queue::reserve();
+        $this->assertNotNull($job);
+        $this->assertSame($id, (int) $job['id']);
+
+        Database::getInstance()->pdo()->exec('DROP TABLE IF EXISTS jobs');
+    }
 }

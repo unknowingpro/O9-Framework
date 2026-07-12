@@ -47,8 +47,13 @@ final class Env
                 && $value[strlen($value) - 1] === $value[0]) {
                 // Quoted value: strip the matching quotes, keep content verbatim.
                 $value = substr($value, 1, -1);
-            } elseif (($pos = strpos($value, ' #')) !== false) {
-                // Unquoted value: drop a trailing inline comment.
+            } elseif (($pos = strpos($value, '#')) !== false && ($pos === 0 || $value[$pos - 1] === ' ')) {
+                // Unquoted value: drop a trailing inline comment. Checked against
+                // the already-trimmed value, so a blank value followed only by a
+                // comment (`KEY=   # note`) has its '#' at position 0 here — the
+                // leading whitespace that would otherwise mark the boundary was
+                // already removed by trim() above, so position 0 must count too,
+                // or a comment-only line reads back as literal comment text.
                 $value = rtrim(substr($value, 0, $pos));
             }
             self::$vars[$key] = $value;

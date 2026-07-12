@@ -20,6 +20,8 @@ final class EnvTest extends TestCase
             'QUOTED_DOUBLE="with spaces"',
             "QUOTED_SINGLE='single # not a comment'",
             'INLINE_COMMENT=value # trailing note',
+            'BLANK_WITH_COMMENT=          # this key is intentionally left blank',
+            'UNQUOTED_HASH_NO_SPACE=path#fragment',
             'BOOL_TRUE=true',
             'BOOL_PAREN=(false)',
             'NULLED=null',
@@ -47,6 +49,26 @@ final class EnvTest extends TestCase
     public function testInlineCommentStrippedFromUnquotedValue(): void
     {
         $this->assertSame('value', Env::get('INLINE_COMMENT'));
+    }
+
+    /**
+     * A `KEY=   # note` line (a documented-but-unset key, the pattern
+     * .env.example uses throughout) must resolve to an empty string, not
+     * the literal comment text. trim() runs before the inline-comment scan
+     * and eats the leading whitespace that would otherwise mark where the
+     * comment starts, leaving '#' at position 0 of the trimmed value — that
+     * has to count as a comment boundary too, or the whole "# this key..."
+     * string becomes the resolved value.
+     */
+    public function testBlankValueWithTrailingCommentResolvesToEmptyNotTheCommentText(): void
+    {
+        $this->assertSame('', Env::get('BLANK_WITH_COMMENT', 'SHOULD_NOT_SEE_DEFAULT'));
+    }
+
+    /** A '#' not preceded by a space is data, not a comment marker (matches the quoted HASH_URL case). */
+    public function testUnquotedHashWithoutPrecedingSpaceIsKeptAsData(): void
+    {
+        $this->assertSame('path#fragment', Env::get('UNQUOTED_HASH_NO_SPACE'));
     }
 
     public function testLiteralCoercion(): void

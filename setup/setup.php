@@ -19,6 +19,15 @@ declare(strict_types=1);
  *      reachable yet doesn't fail the install; run `migrate` later).
  */
 
+// Every other entry point (public/index.php, setup/bin/console) defines
+// this before requiring anything else — helpers.php's base_path() falls
+// back to a path relative to wherever it physically loaded from when this
+// isn't set, which is only reliably this project's root when Composer's
+// autoloader was generated INSIDE it (not a shared/symlinked vendor/).
+if (!defined('BASE_PATH')) {
+    define('BASE_PATH', dirname(__DIR__));
+}
+
 /**
  * @return list<array{name: string, ok: bool, detail: string}>
  */

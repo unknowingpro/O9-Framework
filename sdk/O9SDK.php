@@ -18,14 +18,21 @@ namespace O9\Sdk;
  *   try {
  *       $api->post('/push/subscribe', ['endpoint' => $endpoint, 'keys' => $keys]);
  *   } catch (O9ApiException $e) {
- *       if ($e->code === 'unauthorized') { ... }
+ *       if ($e->errorCode === 'unauthorized') { ... }
  *   }
  */
 final class O9ApiException extends \RuntimeException
 {
-    /** @param array<string, mixed>|null $details */
+    /**
+     * Named errorCode, not code — \Exception already declares a non-readonly
+     * $code property (numeric, for getCode()), and a child class can't
+     * redeclare an inherited property as readonly; PHP fatals the whole
+     * class declaration if it tries.
+     *
+     * @param array<string, mixed>|null $details
+     */
     public function __construct(
-        public readonly string $code,
+        public readonly string $errorCode,
         string $message,
         public readonly int $status,
         public readonly ?array $details = null,
@@ -72,6 +79,7 @@ final class O9SDK
     }
 
     /**
+     * @param non-empty-string $method always a literal from get()/post()/put()/delete() above
      * @param array<string, mixed> $query
      * @param array<string, mixed>|null $body
      */
