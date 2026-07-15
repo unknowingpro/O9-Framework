@@ -481,9 +481,14 @@ class App
         $path   = $this->request->path();
 
         $botPrefix = (string) config('app.bot_route_prefix', '/webhook');
+        // Match the bot prefix on a path boundary, not as a bare substring, so
+        // '/webhook-status' (a distinct web route) doesn't load the bot routes
+        // just because it starts with '/webhook'.
+        $isBotPath = $botPrefix !== ''
+            && ($path === $botPrefix || str_starts_with($path, rtrim($botPrefix, '/') . '/'));
         if (str_starts_with($path, '/api/')) {
             $file = base_path('routes/api.php');
-        } elseif ($botPrefix !== '' && str_starts_with($path, $botPrefix) && is_file(base_path('routes/bot.php'))) {
+        } elseif ($isBotPath && is_file(base_path('routes/bot.php'))) {
             $file = base_path('routes/bot.php');
         } else {
             $file = base_path('routes/web.php');
