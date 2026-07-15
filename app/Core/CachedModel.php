@@ -55,19 +55,18 @@ abstract class CachedModel extends BaseModel
     }
 
     /**
-     * Return all rows (cached). Supports the same arguments as QueryBuilder::get().
+     * Return all rows (cached).
      *
-     * @param list<string> $columns
      * @return list<array<string, mixed>>
      */
-    public function cachedAll(array $columns = ['*']): array
+    public function cachedAll(): array
     {
         $ttl = $this->cacheTtl ?? (int) config('cache.default_ttl', 3600);
         $key = $this->allCacheKey ?: $this->table . ':all';
 
         /** @var list<array<string, mixed>> $cached */
-        $cached = CacheManager::remember($key, $ttl, function () use ($columns): array {
-            return $this->table()->get($columns);
+        $cached = CacheManager::remember($key, $ttl, function (): array {
+            return $this->table()->get();
         });
 
         return $cached;
