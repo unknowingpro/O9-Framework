@@ -138,4 +138,24 @@ final class RateLimitTest extends TestCase
             $this->assertSame(302, $r->status);
         }
     }
+
+    public function testGcFilesRemovesOnlyStaleBuckets(): void
+    {
+        $dir = base_path('storage/data/ratelimit');
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        $fresh = $dir . '/fresh.json';
+        $stale = $dir . '/stale.json';
+        file_put_contents($fresh, '{}');
+        file_put_contents($stale, '{}');
+        // Age the stale bucket well past the cutoff.
+        touch($stale, time() - 7200);
+
+        $removed = RateLimit::gcFiles(3600);
+
+        $this->assertGreaterThanOrEqual(1, $removed);
+        $this->assertFileExists($fresh, 'a recently-touched bucket must survive');
+        $this->assertFileDoesNotExist($stale, 'a bucket older than the cutoff must be removed');
+    }
 }

@@ -93,6 +93,29 @@ class RateLimit implements Middleware
     }
 
     /**
+     * Delete bucket files not modified within $olderThanSeconds. The file
+     * fallback creates one file per (ip[,path]) pair and never removed them, so
+     * storage/data/ratelimit/ grew unbounded whenever Redis was down. A stale
+     * bucket's window is long expired, so removing it is safe — the next
+     * request just recreates it. Call from a scheduled task (once a day is
+     * plenty) or rely on the opportunistic sweep in rmwFile().
+     *
+     * @return int number of bucket files removed
+     */
+    public static function gcFiles(int $olderThanSeconds = 86400): int
+    {
+        $cutoff  = time() - max(0, $olderThanSeconds);
+        $removed = 0;
+        foreach (glob(base_path('storage/data/ratelimit/*.json')) ?: [] as $f) {
+            $mtime = @filemtime($f);
+            if ($mtime !== false && $mtime < $cutoff && @unlink($f)) {
+                $removed++;
+            }
+        }
+        return $removed;
+    }
+
+    /**
      * Increment this bucket's counter and return its post-increment
      * {count, reset}. Prefers Redis (atomic, node-shared); falls back to the
      * flock'd file store when Redis is unreachable or errors mid-request, so
@@ -155,6 +178,13 @@ class RateLimit implements Middleware
         $dir = dirname($f);
         if (!is_dir($dir)) {
             @mkdir($dir, 0775, true);
+        }
+        // Opportunistic cleanup: on roughly 1% of file-fallback hits, sweep
+        // day-old buckets so the directory can't grow without bound when Redis
+        // is unavailable. Cheap and self-limiting; a scheduled gcFiles() can
+        // also run it deterministically.
+        if (random_int(1, 100) === 1) {
+            self::gcFiles();
         }
         $fh = fopen($f, 'c+');
         if (!$fh) {
