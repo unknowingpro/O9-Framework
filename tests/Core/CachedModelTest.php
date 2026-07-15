@@ -76,6 +76,18 @@ final class CachedModelTest extends TestCase
         $this->assertSame('Delta', $row['name']);
     }
 
+    public function testUpdateByIdForgetsAllCache(): void
+    {
+        $id = $this->model->create(['name' => 'Old']);
+        $this->model->cachedAll(); // primes the all-cache
+
+        $this->model->updateById($id, ['name' => 'New']);
+
+        // cachedAll must not serve the pre-update row
+        $all = $this->model->cachedAll();
+        $this->assertSame('New', $all[0]['name']);
+    }
+
     public function testDeleteByIdForgetsCache(): void
     {
         $id = $this->model->create(['name' => 'Epsilon']);

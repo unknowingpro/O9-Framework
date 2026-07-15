@@ -93,6 +93,7 @@ abstract class CachedModel extends BaseModel
     {
         $affected = parent::updateById($id, $data);
         $this->forgetFind($id);
+        $this->forgetAll();
         return $affected;
     }
 
