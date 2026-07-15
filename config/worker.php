@@ -13,4 +13,10 @@ return [
     // A worker's heartbeat older than this (seconds) is reported as down by
     // Core\Metrics.
     'heartbeat_max_age' => (int) env('WORKER_HEARTBEAT_MAX_AGE', 120),
+
+    // A queue job reserved longer than this (seconds) is treated as the orphan
+    // of a crashed worker and becomes claimable again (Core\Queue::reserve).
+    // Must exceed the longest job's runtime or a slow job can double-run.
+    // Buried jobs (attempts exhausted) are never reclaimed.
+    'queue_retry_after' => (int) env('QUEUE_RETRY_AFTER', 3600),
 ];

@@ -94,6 +94,35 @@ final class QueueTest extends TestCase
         $this->assertNull(Queue::reserve());
     }
 
+    public function testStaleReservationFromCrashedWorkerIsReclaimed(): void
+    {
+        $id = Queue::push(RecordingJob::class);
+        $this->assertNotNull(Queue::reserve());
+
+        // Simulate a hard-crashed worker: the reservation is older than the
+        // retry_after window but the row was never released or buried.
+        $stale = time() - ((int) config('worker.queue_retry_after', 3600) + 10);
+        $this->db->raw('UPDATE jobs SET reserved_at = ? WHERE id = ?', [$stale, $id]);
+
+        $job = Queue::reserve();
+        $this->assertNotNull($job, 'a stale reservation must become claimable again');
+        $this->assertSame($id, (int) $job['id']);
+        $this->assertSame(2, (int) $job['attempts'], 'reclaim counts as a new attempt');
+    }
+
+    public function testBuriedJobIsNeverReclaimedEvenWhenStale(): void
+    {
+        $id = Queue::push(FailingJob::class);
+        // Bury it: attempts at MAX with a reservation left in place.
+        $stale = time() - ((int) config('worker.queue_retry_after', 3600) + 10);
+        $this->db->raw(
+            'UPDATE jobs SET attempts = ?, reserved_at = ? WHERE id = ?',
+            [Queue::MAX_ATTEMPTS, $stale, $id]
+        );
+
+        $this->assertNull(Queue::reserve(), 'buried jobs stay buried');
+    }
+
     public function testWorkRunsHandlerAndDeletesOnSuccess(): void
     {
         Queue::push(RecordingJob::class, ['user_id' => 7, 'note' => 'سلام']);

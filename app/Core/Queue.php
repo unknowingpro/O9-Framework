@@ -37,25 +37,43 @@ final class Queue
     /**
      * Atomically claim the next runnable job (incrementing attempts).
      *
+     * Claimable rows are the unreserved ones PLUS orphans of hard-crashed
+     * workers: a reservation older than worker.queue_retry_after whose
+     * attempts are still below MAX_ATTEMPTS becomes claimable again (its
+     * up-front attempts increment means the crash consumed an attempt).
+     * Buried jobs (attempts >= MAX) are excluded, so they stay parked for
+     * inspection no matter how stale their reservation is.
+     *
+     * The claim itself is the conditional UPDATE's row count: on engines
+     * whose plain SELECT is non-locking (MySQL REPEATABLE READ), two workers
+     * can read the same row, but only one UPDATE matches — the loser gets 0
+     * rows and must treat the job as taken, never run it.
+     *
      * @return array<string,mixed>|null
      */
     public static function reserve(string $queue = 'default'): ?array
     {
         $db  = Database::getInstance();
         $now = time();
+        // Floor of 60s so a mis-set config can't reclaim a job that is still running.
+        $staleBefore = $now - max(60, (int) config('worker.queue_retry_after', 3600));
+        $claimable   = '(reserved_at IS NULL OR (reserved_at <= ? AND attempts < ?))';
         /** @var array<string,mixed>|null */
-        return $db->transaction(function () use ($db, $queue, $now): ?array {
+        return $db->transaction(function () use ($db, $queue, $now, $staleBefore, $claimable): ?array {
             $row = $db->raw(
-                'SELECT * FROM jobs WHERE queue = ? AND reserved_at IS NULL AND available_at <= ? ORDER BY id LIMIT 1',
-                [$queue, $now]
+                "SELECT * FROM jobs WHERE queue = ? AND available_at <= ? AND $claimable ORDER BY id LIMIT 1",
+                [$queue, $now, $staleBefore, self::MAX_ATTEMPTS]
             )->fetch();
             if (!is_array($row)) {
                 return null;
             }
-            $db->raw(
-                'UPDATE jobs SET reserved_at = ?, attempts = attempts + 1 WHERE id = ? AND reserved_at IS NULL',
-                [$now, (int) $row['id']]
-            );
+            $claimed = $db->raw(
+                "UPDATE jobs SET reserved_at = ?, attempts = attempts + 1 WHERE id = ? AND $claimable",
+                [$now, (int) $row['id'], $staleBefore, self::MAX_ATTEMPTS]
+            )->rowCount();
+            if ($claimed === 0) {
+                return null; // a concurrent worker won the claim — never double-run
+            }
             $row['attempts']    = (int) $row['attempts'] + 1;
             $row['reserved_at'] = $now;
             return $row;
