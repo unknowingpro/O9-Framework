@@ -98,6 +98,67 @@ final class LocalDriverTest extends TestCase
         $this->driver->listDirectory('../../etc');
     }
 
+    public function testSafePathRejectsTrailingDotDotSegment(): void
+    {
+        // 'x/..' resolves to the storage root — deleteItem() on it would wipe
+        // every uploaded file. It must be rejected like any other traversal.
+        $this->driver->makeDirectory('keepme');
+        $tmp = tempnam(sys_get_temp_dir(), 'src_');
+        file_put_contents($tmp, 'x');
+        $this->driver->put($tmp, 'keepme/a.txt');
+        @unlink($tmp);
+
+        try {
+            $this->driver->deleteItem('keepme/..');
+            $this->fail('expected traversal rejection for a trailing .. segment');
+        } catch (\RuntimeException) {
+            // expected
+        }
+        $this->assertTrue($this->driver->exists('keepme/a.txt'), 'root contents must survive');
+    }
+
+    /** @return list<string> the methods that did NOT reject the traversal path */
+    private function methodsAcceptingTraversal(string $tmp): array
+    {
+        $accepted = [];
+        $calls = [
+            'exists'       => fn () => $this->driver->exists('../escape.txt'),
+            'get'          => fn () => $this->driver->get('../escape.txt'),
+            'delete'       => fn () => $this->driver->delete('../escape.txt'),
+            'absolutePath' => fn () => $this->driver->absolutePath('../escape.txt'),
+            'put'          => fn () => $this->driver->put($tmp, '../escape.txt'),
+        ];
+        foreach ($calls as $name => $call) {
+            try {
+                $call();
+                $accepted[] = $name; // returned without rejecting → traversal not guarded
+            } catch (\RuntimeException) {
+                // rejected as intended
+            }
+        }
+        return $accepted;
+    }
+
+    public function testStorageMethodsRejectTraversal(): void
+    {
+        // The StorageDriverInterface methods (put/get/delete/exists/
+        // absolutePath) must guard traversal too — not only the file-manager
+        // API. A '../' path must never escape the root.
+        $escaped = dirname($this->root) . '/escape.txt';
+        @unlink($escaped);
+        $tmp = tempnam(sys_get_temp_dir(), 'src_');
+        file_put_contents($tmp, 'x');
+
+        $accepted = $this->methodsAcceptingTraversal($tmp);
+
+        @unlink($tmp);
+        $leaked = is_file($escaped);
+        @unlink($escaped);
+
+        $this->assertSame([], $accepted, 'these methods let a ../ path through: ' . implode(', ', $accepted));
+        $this->assertFalse($leaked, 'put() wrote outside the storage root');
+    }
+
     public function testQuotaReportsPlausibleShape(): void
     {
         $q = $this->driver->quota();

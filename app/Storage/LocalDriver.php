@@ -17,7 +17,7 @@ class LocalDriver implements StorageDriverInterface, FileManagerInterface
 
     public function put(string $tmpPath, string $remotePath, string $uuid = ''): bool
     {
-        $abs = $this->root . $remotePath;
+        $abs = $this->safePath($remotePath);
         $dir = dirname($abs);
         if (!is_dir($dir)) mkdir($dir, 0755, true);
 
@@ -38,14 +38,14 @@ class LocalDriver implements StorageDriverInterface, FileManagerInterface
 
     public function get(string $remotePath): string
     {
-        $abs = $this->root . $remotePath;
+        $abs = $this->safePath($remotePath);
         if (!file_exists($abs)) throw new \RuntimeException("Local file not found: $abs");
         return $abs; // no copy needed — return the abs path directly
     }
 
     public function delete(string $remotePath): bool
     {
-        $abs = $this->root . $remotePath;
+        $abs = $this->safePath($remotePath);
         if (!file_exists($abs)) return true;
         $ok  = @unlink($abs);
         $dir = dirname($abs);
@@ -55,12 +55,12 @@ class LocalDriver implements StorageDriverInterface, FileManagerInterface
 
     public function exists(string $remotePath): bool
     {
-        return file_exists($this->root . $remotePath);
+        return file_exists($this->safePath($remotePath));
     }
 
     public function absolutePath(string $remotePath): string
     {
-        return $this->root . $remotePath;
+        return $this->safePath($remotePath);
     }
 
     public function root(): string { return $this->root; }
@@ -69,14 +69,30 @@ class LocalDriver implements StorageDriverInterface, FileManagerInterface
 
     // ── FileManagerInterface (browsable local filesystem) ───────────────────
 
-    /** Resolve a browse-relative path under root, rejecting traversal. */
+    /**
+     * Resolve a relative path under root, rejecting traversal. Walks the path
+     * segment by segment rather than substring-matching, so a bare or trailing
+     * '..' ('x/..', which resolves to the root) is caught just like '../'. Used
+     * by BOTH the storage API (put/get/delete/…) and the file-manager methods,
+     * so no caller can escape the root.
+     */
     private function safePath(string $rel): string
     {
-        $rel = ltrim(str_replace('\\', '/', $rel), '/');
-        if ($rel !== '' && (str_contains($rel, '../') || str_starts_with($rel, '..') || str_contains($rel, "\0"))) {
+        $rel = str_replace('\\', '/', $rel);
+        if (str_contains($rel, "\0")) {
             throw new \RuntimeException('Invalid path');
         }
-        return rtrim($this->root, '/') . ($rel !== '' ? '/' . $rel : '');
+        $clean = [];
+        foreach (explode('/', $rel) as $segment) {
+            if ($segment === '' || $segment === '.') {
+                continue; // collapse empty segments and no-op '.'
+            }
+            if ($segment === '..') {
+                throw new \RuntimeException('Invalid path: traversal is not allowed');
+            }
+            $clean[] = $segment;
+        }
+        return rtrim($this->root, '/') . ($clean !== [] ? '/' . implode('/', $clean) : '');
     }
 
     public function listDirectory(string $path = ''): array
