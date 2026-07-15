@@ -102,6 +102,9 @@ final class UploadValidator
 
     /**
      * Convenience: returns true when the upload is valid, false otherwise.
+     *
+     * @param array<string, mixed>|null $file  A single $_FILES entry, or null.
+     * @param array<string, mixed>      $rules See validate() for the accepted keys.
      */
     public static function passes(?array $file, array $rules = []): bool
     {
@@ -111,6 +114,8 @@ final class UploadValidator
     /**
      * Convenience: returns the validated data array, or null on failure.
      *
+     * @param array<string, mixed>|null $file  A single $_FILES entry, or null.
+     * @param array<string, mixed>      $rules See validate() for the accepted keys.
      * @return array<string, mixed>|null
      */
     public static function validData(?array $file, array $rules = []): ?array

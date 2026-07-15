@@ -117,10 +117,14 @@ final class Image
         if ($dims === false) {
             throw new \RuntimeException("Cannot read image dimensions: {$src}");
         }
+        $type = image_type_to_extension($dims[2], false);
+        if ($type === false) {
+            throw new \RuntimeException("Unknown image type: {$src}");
+        }
         return [
-            'w'    => $dims[0],
-            'h'    => $dims[1],
-            'type' => image_type_to_extension($dims[2], false),
+            'w'    => (int) $dims[0],
+            'h'    => (int) $dims[1],
+            'type' => $type,
         ];
     }
 
@@ -143,6 +147,9 @@ final class Image
         }
 
         $ext = image_type_to_extension($dims[2], false);
+        if ($ext === false) {
+            throw new \RuntimeException("Unknown image type: {$src}");
+        }
         $im  = match ($dims[2]) {
             IMAGETYPE_JPEG  => @imagecreatefromjpeg($src),
             IMAGETYPE_PNG   => @imagecreatefrompng($src),
@@ -161,7 +168,7 @@ final class Image
             imagesavealpha($im, true);
         }
 
-        return ['im' => $im, 'w' => $dims[0], 'h' => $dims[1], 'ext' => $ext];
+        return ['im' => $im, 'w' => (int) $dims[0], 'h' => (int) $dims[1], 'ext' => $ext];
     }
 
     /**
@@ -178,6 +185,9 @@ final class Image
     /** Create a true-colour canvas. */
     private static function createCanvas(int $w, int $h): \GdImage
     {
+        if ($w < 1 || $h < 1) {
+            throw new \RuntimeException("Invalid canvas dimensions: {$w}x{$h}");
+        }
         $canvas = imagecreatetruecolor($w, $h);
         if ($canvas === false) {
             throw new \RuntimeException("Failed to create {$w}x{$h} canvas");

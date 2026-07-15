@@ -21,7 +21,7 @@ namespace App\Core;
 abstract class Seeder
 {
     /**
-     * @param array<string, mixed> $args CLI args passed through from the command.
+     * @param list<string> $args Raw CLI arguments passed through from the command.
      *        --fresh  truncate tables before seeding (caller decides what to truncate)
      *        --class  run only this seeder class
      */
@@ -38,6 +38,8 @@ abstract class Seeder
 
     /**
      * Check if --fresh was passed.
+     *
+     * @param list<string> $args
      */
     protected function isFresh(array $args): bool
     {
@@ -56,9 +58,17 @@ abstract class Seeder
             throw new \RuntimeException("Seeder fixture not found: {$path}");
         }
         $data = json_decode((string) file_get_contents($path), true);
-        if (!is_array($data)) {
-            throw new \RuntimeException("Invalid JSON fixture: {$path}");
+        if (!is_array($data) || !array_is_list($data)) {
+            throw new \RuntimeException("Invalid JSON fixture (expected a list of rows): {$path}");
         }
-        return $data;
+        $rows = [];
+        foreach ($data as $row) {
+            if (!is_array($row)) {
+                throw new \RuntimeException("Invalid JSON fixture (each row must be an object): {$path}");
+            }
+            /** @var array<string, mixed> $row */
+            $rows[] = $row;
+        }
+        return $rows;
     }
 }
