@@ -111,6 +111,44 @@ final class QueryBuilderTest extends TestCase
         $this->db->table('qb_t')->join('qb_j; DROP TABLE qb_t', 'a.b', '=', 'c.d');
     }
 
+    public function testCountIncludesJoins(): void
+    {
+        $this->db->pdo()->exec('CREATE TABLE IF NOT EXISTS qb_j (id INTEGER PRIMARY KEY, qb_t_id INTEGER, tag TEXT)');
+        $this->db->pdo()->exec('DELETE FROM qb_j');
+        $aId = (int) $this->db->raw("SELECT id FROM qb_t WHERE name = 'a'")->fetch()['id'];
+        $bId = (int) $this->db->raw("SELECT id FROM qb_t WHERE name = 'b'")->fetch()['id'];
+        $this->db->table('qb_j')->insert([
+            ['qb_t_id' => $aId, 'tag' => 'keep'],
+            ['qb_t_id' => $bId, 'tag' => 'drop'],
+        ]);
+
+        // A count over a joined query filtered on the JOINED table's column
+        // must build the same FROM/JOIN clause as get() — not just FROM qb_t.
+        $n = $this->db->table('qb_t')
+            ->join('qb_j', 'qb_j.qb_t_id', '=', 'qb_t.id')
+            ->where('qb_j.tag', '=', 'keep')
+            ->count();
+        $this->assertSame(1, $n);
+    }
+
+    public function testCountWithGroupByCountsGroups(): void
+    {
+        // 'x' has two rows and 'y' one — a grouped count() must return the
+        // number of GROUPS (2), not the first group's row count.
+        $n = $this->db->table('qb_t')->groupBy('grp')->count();
+        $this->assertSame(2, $n);
+    }
+
+    public function testCountWithGroupByAndHavingCountsMatchingGroups(): void
+    {
+        // Only group 'x' reaches SUM(score) >= 30... both do (x=30, y=30);
+        // raise the bar so only one group qualifies.
+        $n = $this->db->table('qb_t')->groupBy('grp')->havingRaw('SUM(score) > 30')->count();
+        $this->assertSame(0, $n);
+        $n = $this->db->table('qb_t')->groupBy('grp')->havingRaw('SUM(score) >= 30')->count();
+        $this->assertSame(2, $n);
+    }
+
     public function testUnsafeColumnAndOperatorRejected(): void
     {
         try {

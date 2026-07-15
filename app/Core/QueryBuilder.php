@@ -275,7 +275,14 @@ final class QueryBuilder
 
     public function count(): int
     {
-        $sql = 'SELECT COUNT(*) AS c FROM ' . $this->table . $this->buildWhere();
+        $from = 'FROM ' . $this->table
+            . ($this->joins !== [] ? ' ' . implode(' ', $this->joins) : '')
+            . $this->buildWhere();
+        // A grouped query yields one row PER GROUP, so COUNT(*) over it would
+        // return the first group's row count — count the groups via a subquery.
+        $sql = $this->groupBy !== []
+            ? 'SELECT COUNT(*) AS c FROM (SELECT 1 ' . $from . $this->buildGroup() . ') AS grouped'
+            : 'SELECT COUNT(*) AS c ' . $from;
         $row = $this->db->raw($sql, $this->whereOnlyBindings())->fetch();
         return (int) (is_array($row) ? ($row['c'] ?? 0) : 0);
     }
