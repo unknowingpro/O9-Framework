@@ -167,10 +167,26 @@ final class Jwt
 
     private static function secret(?Key $key): string
     {
-        if ($key !== null) {
-            return $key->keyMaterial;
+        $secret = $key !== null
+            ? $key->keyMaterial
+            : (string) config('app.jwt.secret', '');
+        return self::assertUsableSecret($secret);
+    }
+
+    /**
+     * Fail closed on an unusable signing secret. An empty value or one of the
+     * shipped placeholders means the app was never configured — signing or
+     * verifying with it would mint/accept forgeable tokens, so throw instead of
+     * silently defaulting to 'change-me'. Mirrors Security\Crypto, which
+     * refuses to run without APP_KEY. Returns the secret unchanged when usable.
+     */
+    public static function assertUsableSecret(string $secret): string
+    {
+        $weak = ['', 'change-me', 'change-me-to-a-long-random-string', 'dev-secret-please-rotate-in-production'];
+        if (in_array($secret, $weak, true)) {
+            throw new \RuntimeException('Refusing to use JWT secret: set a strong JWT_SECRET.');
         }
-        return (string) config('app.jwt.secret', 'change-me');
+        return $secret;
     }
 
     private static function b64(string $bin): string

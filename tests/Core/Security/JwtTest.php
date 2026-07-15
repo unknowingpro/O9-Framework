@@ -33,6 +33,31 @@ final class JwtTest extends TestCase
         $this->assertEqualsWithDelta(time() + 60, $payload['exp'], 2);
     }
 
+    public function testAssertUsableSecretRejectsWeakValues(): void
+    {
+        foreach (['', 'change-me', 'change-me-to-a-long-random-string', 'dev-secret-please-rotate-in-production'] as $weak) {
+            try {
+                Jwt::assertUsableSecret($weak);
+                $this->fail('expected rejection of weak secret: ' . var_export($weak, true));
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('JWT secret', $e->getMessage());
+            }
+        }
+    }
+
+    public function testAssertUsableSecretAcceptsAStrongValue(): void
+    {
+        $strong = 'a-genuinely-random-32-byte-secret!!';
+        $this->assertSame($strong, Jwt::assertUsableSecret($strong));
+    }
+
+    public function testEncodeFailsClosedWithAKeyCarryingAWeakSecret(): void
+    {
+        // A Key with a placeholder secret must not mint a token.
+        $this->expectException(\RuntimeException::class);
+        Jwt::encode(['sub' => 1], 60, new Key('change-me'));
+    }
+
     public function testTtlIsClampedToConfiguredMax(): void
     {
         $token = Jwt::encode(['sub' => 1], 10 * 365 * 86400);
