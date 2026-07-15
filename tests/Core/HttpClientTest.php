@@ -58,6 +58,30 @@ final class HttpClientTest extends TestCase
         (new HttpClient())->get('http://169.254.169.254/latest/meta-data/');
     }
 
+    public function testRejectsIpv6LoopbackLiteral(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('private/reserved');
+        (new HttpClient())->get('http://[::1]/admin');
+    }
+
+    public function testRejectsIpv6UniqueLocalLiteral(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('private/reserved');
+        (new HttpClient())->get('http://[fd00::1]/internal');
+    }
+
+    public function testRejectsUnresolvableHostFailClosed(): void
+    {
+        // .invalid is reserved (RFC 2606) and never resolves. A host with no
+        // A record must NOT slip past the guard (an AAAA-only host previously
+        // did — gethostbynamel() returned false and the check loop never ran).
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('resolve');
+        (new HttpClient())->get('http://ssrf-guard-test.invalid/');
+    }
+
     public function testConvenienceMethodsExistAndValidateTheirUrl(): void
     {
         $http = new HttpClient();
