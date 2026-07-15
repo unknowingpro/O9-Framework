@@ -138,7 +138,14 @@ final class Router
     {
         $path   = $request->path();
         $method = $request->method();
+        // A HEAD request is served by the matching GET route when no explicit
+        // HEAD route exists (RFC 7231 §4.3.2) — so health checks and `curl -I`
+        // get 200, not 405. An explicit HEAD route still wins because it is
+        // matched directly before this fallback is ever considered.
+        $fallbackMethod = $method === 'HEAD' ? 'GET' : null;
+
         $methodMismatch = false;
+        $fallback = null;
 
         foreach ($this->routes as $r) {
             $params = [];
@@ -151,6 +158,9 @@ final class Router
                 continue;
             }
             if ($r['method'] !== $method) {
+                if ($fallbackMethod !== null && $r['method'] === $fallbackMethod && $fallback === null) {
+                    $fallback = ['route' => $r, 'params' => $params]; // remember but keep scanning for an exact HEAD route
+                }
                 $methodMismatch = true;
                 continue;
             }
@@ -161,6 +171,16 @@ final class Router
                 $this->runMiddleware($mw, $request);
             }
             $this->invoke($r['handler'], $request, $params);
+            return;
+        }
+
+        // No exact match — serve the remembered GET route for a HEAD request.
+        if ($fallback !== null) {
+            $request->setParams($fallback['params']);
+            foreach ($fallback['route']['middleware'] as $mw) {
+                $this->runMiddleware($mw, $request);
+            }
+            $this->invoke($fallback['route']['handler'], $request, $fallback['params']);
             return;
         }
 
@@ -210,6 +230,10 @@ final class Router
             if ($hit && !in_array($r['method'], $out, true)) {
                 $out[] = $r['method'];
             }
+        }
+        // A GET route also answers HEAD (see dispatch()), so advertise it.
+        if (in_array('GET', $out, true) && !in_array('HEAD', $out, true)) {
+            $out[] = 'HEAD';
         }
         return $out;
     }

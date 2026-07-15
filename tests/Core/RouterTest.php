@@ -164,7 +164,8 @@ final class RouterTest extends TestCase
             $this->fail('expected 405');
         } catch (HttpResponse $r) {
             $this->assertSame(405, $r->status);
-            $this->assertSame('GET, POST', $r->headers['Allow'] ?? '');
+            // HEAD is advertised because the GET route also answers it.
+            $this->assertSame('GET, POST, HEAD', $r->headers['Allow'] ?? '');
         }
     }
 
@@ -177,6 +178,41 @@ final class RouterTest extends TestCase
         [, $p2] = $this->dispatch($router, $this->request('OPTIONS', '/h'));
         $this->assertSame('head', $p1['tag'] ?? null);
         $this->assertSame('opts', $p2['tag'] ?? null);
+    }
+
+    public function testHeadFallsBackToGetRoute(): void
+    {
+        // Per RFC 7231, a HEAD request must be served by the GET handler when no
+        // explicit HEAD route exists — so health checks and curl -I don't 405.
+        $router = new Router();
+        $router->get('/only-get', $this->respond('got'));
+        [$status, $payload] = $this->dispatch($router, $this->request('HEAD', '/only-get'));
+        $this->assertSame(200, $status);
+        $this->assertSame('got', $payload['tag'] ?? null);
+    }
+
+    public function testExplicitHeadRouteWinsOverGetFallback(): void
+    {
+        $router = new Router();
+        $router->get('/both', $this->respond('via-get'));
+        $router->head('/both', $this->respond('via-head'));
+        [, $payload] = $this->dispatch($router, $this->request('HEAD', '/both'));
+        $this->assertSame('via-head', $payload['tag'] ?? null);
+    }
+
+    public function testMethodMismatchAllowHeaderIncludesHeadForGetRoutes(): void
+    {
+        $router = new Router();
+        $router->get('/g', $this->respond('g'));
+        try {
+            $router->dispatch($this->request('DELETE', '/g'));
+            $this->fail('expected 405');
+        } catch (HttpResponse $r) {
+            $this->assertSame(405, $r->status);
+            $allow = $r->headers['Allow'] ?? '';
+            $this->assertStringContainsString('GET', $allow);
+            $this->assertStringContainsString('HEAD', $allow);
+        }
     }
 }
 
